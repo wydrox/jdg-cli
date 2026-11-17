@@ -266,7 +266,7 @@ pub(crate) fn openrouter_extract_invoice_fields(
             .post(OPENROUTER_CHAT_URL)
             .header("Authorization", format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
-            .header("HTTP-Referer", "https://github.com/wydrox/lab")
+            .header("HTTP-Referer", "https://github.com/wydrox/jdg-cli")
             .header("X-Title", "LAB")
             .json(&body)
             .send()

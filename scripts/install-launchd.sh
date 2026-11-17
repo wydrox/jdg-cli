@@ -15,10 +15,12 @@ SCRIPT="$ROOT/scripts/lab-automation.sh"
 # needs node/npm for the Saldeo re-login and Homebrew tools (poppler).
 BASE_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-# Explicit LAB_BIN wins; else ~/.local/bin/lab, else the legacy ~/.local/bin/lab-cli.
+# Explicit LAB_BIN wins; else ~/.local/bin/lab, else ~/.local/bin/jdg-cli, else the legacy ~/.local/bin/lab-cli.
 resolve_lab_bin() {
   if [[ -n "${LAB_BIN_OVERRIDE:-}" ]]; then
     printf '%s\n' "$LAB_BIN_OVERRIDE"
+  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/jdg-cli" ]]; then
+    printf '%s\n' "$HOME/.local/bin/jdg-cli"
   elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/lab-cli" ]]; then
     printf '%s\n' "$HOME/.local/bin/lab-cli"
   else

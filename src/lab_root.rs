@@ -15,7 +15,7 @@ pub(crate) enum LabRootSource {
     /// `LAB_ROOT` z pliku konfiguracji: ustawiony ręcznie albo zapamiętany przy pierwszym
     /// uruchomieniu w katalogu z danymi.
     Config,
-    /// Bieżący katalog z `lab.sqlite`, `data/` albo checkout pakietu `lab-cli`.
+    /// Bieżący katalog z `lab.sqlite`, `data/` albo checkout pakietu `jdg-cli` (albo dawnego `lab-cli`).
     Cwd,
     /// `~/.local/share/lab`.
     Home,
@@ -102,7 +102,7 @@ fn lab_root_value_path(value: &str, inputs: &LabRootInputs<'_>) -> Option<PathBu
     })
 }
 
-/// Katalog, w którym LAB już pracował (`lab.sqlite`, `data/`) albo checkout `lab-cli`.
+/// Katalog, w którym LAB już pracował (`lab.sqlite`, `data/`) albo checkout `jdg-cli` (dawniej `lab-cli`).
 pub(crate) fn cwd_holds_lab_state(cwd: &Path) -> bool {
     cwd.join("lab.sqlite").is_file()
         || cwd.join("data").is_dir()

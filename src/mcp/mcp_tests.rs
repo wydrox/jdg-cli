@@ -1018,7 +1018,7 @@ fn shared_review_score_default_and_range() {
 }
 
 fn parse_cli(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
-    Cli::try_parse_from(std::iter::once("lab-cli").chain(args.iter().copied()))
+    Cli::try_parse_from(std::iter::once("jdg-cli").chain(args.iter().copied()))
 }
 
 fn cli_year_and_score(args: &[&str]) -> (i32, Option<u8>) {

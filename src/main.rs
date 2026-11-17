@@ -89,6 +89,7 @@ pub(crate) use parser::*;
 pub(crate) use scoring::*;
 pub(crate) use sync::*;
 
+/// Celowo dawna nazwa pakietu: zmiana osierociłaby sekrety już zapisane w Keychain.
 pub(crate) const KEYCHAIN_SERVICE: &str = "lab-cli";
 const DEFAULT_PRODUCTMESH_NIP: &str = "5242920020";
 

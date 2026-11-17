@@ -13,10 +13,12 @@ LOG_KEEP=3
 # Error text the binary prints (with LAB_NONINTERACTIVE=1) instead of opening a login window.
 SESSION_EXPIRED_PHRASE="Saldeo session expired"
 
-# Explicit LAB_BIN wins; else ~/.local/bin/lab, else the legacy ~/.local/bin/lab-cli.
+# Explicit LAB_BIN wins; else ~/.local/bin/lab, else ~/.local/bin/jdg-cli, else the legacy ~/.local/bin/lab-cli.
 resolve_lab_bin() {
   if [[ -n "${LAB_BIN:-}" ]]; then
     printf '%s\n' "$LAB_BIN"
+  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/jdg-cli" ]]; then
+    printf '%s\n' "$HOME/.local/bin/jdg-cli"
   elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/lab-cli" ]]; then
     printf '%s\n' "$HOME/.local/bin/lab-cli"
   else

@@ -107,12 +107,12 @@ fn cwd_with_data_directory_is_the_root() {
 }
 
 #[test]
-fn cwd_lab_cli_checkout_is_the_root() {
+fn cwd_jdg_cli_checkout_is_the_root() {
     let tmp = TempDir::new("cwd-pkg");
     let cwd = tmp.dir("cwd");
     fs::write(
         cwd.join("Cargo.toml"),
-        "[package]\nname = \"lab-cli\"\nversion = \"0.1.0\"\n",
+        "[package]\nname = \"jdg-cli\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     assert_eq!(
@@ -202,12 +202,12 @@ fn notice_only_for_remembered_or_home_root() {
 fn remember_lab_root_writes_once_and_keeps_the_first_value() {
     let tmp = TempDir::new("remember");
     let (_store, _guard) = install(tmp.dir("config"), &[], StoreMode::Unavailable);
-    assert!(remember_lab_root(Path::new("/work/lab-cli")).unwrap());
+    assert!(remember_lab_root(Path::new("/work/jdg-cli")).unwrap());
     assert!(!remember_lab_root(Path::new("/other")).unwrap());
     let vars = read_lab_env_file().unwrap();
     assert_eq!(
         vars.get(LAB_ROOT_KEY).map(String::as_str),
-        Some("/work/lab-cli")
+        Some("/work/jdg-cli")
     );
 }
 
@@ -218,12 +218,12 @@ fn remember_lab_root_keeps_other_config_values() {
     let mut vars = HashMap::new();
     vars.insert("LAB_LLM_MODEL".to_string(), "gemma".to_string());
     write_lab_env_file(&vars).unwrap();
-    assert!(remember_lab_root(Path::new("/work/lab-cli")).unwrap());
+    assert!(remember_lab_root(Path::new("/work/jdg-cli")).unwrap());
     let vars = read_lab_env_file().unwrap();
     assert_eq!(vars.get("LAB_LLM_MODEL").map(String::as_str), Some("gemma"));
     assert_eq!(
         vars.get(LAB_ROOT_KEY).map(String::as_str),
-        Some("/work/lab-cli")
+        Some("/work/jdg-cli")
     );
 }
 

@@ -115,7 +115,7 @@ fn dotenv_path_unrelated_rust_project_uses_home() {
     let fixture = DotenvPathFixture::new("unrelated-cli", true);
     fs::write(
         fixture.cwd.join("Cargo.toml"),
-        "# name = \"lab-cli\"\n[package]\nname = \"unrelated-cli\"\n[package.metadata]\nname = \"lab-cli\"\n",
+        "# name = \"jdg-cli\"\n[package]\nname = \"unrelated-cli\"\n[package.metadata]\nname = \"jdg-cli\"\n",
     )
     .unwrap();
     assert_eq!(fixture.selected(None), fixture.fallback());
@@ -123,13 +123,13 @@ fn dotenv_path_unrelated_rust_project_uses_home() {
 
 #[test]
 fn dotenv_path_lab_checkout_not_ignored_uses_home() {
-    let fixture = DotenvPathFixture::new("lab-cli", false);
+    let fixture = DotenvPathFixture::new("jdg-cli", false);
     assert_eq!(fixture.selected(None), fixture.fallback());
 }
 
 #[test]
 fn dotenv_path_tracked_env_uses_home_even_when_ignored() {
-    let fixture = DotenvPathFixture::new("lab-cli", true);
+    let fixture = DotenvPathFixture::new("jdg-cli", true);
     fs::write(fixture.cwd.join(".env"), "").unwrap();
     fixture.git(&["add", "--force", "--", ".env"]);
     assert_eq!(fixture.selected(None), fixture.fallback());
@@ -137,7 +137,7 @@ fn dotenv_path_tracked_env_uses_home_even_when_ignored() {
 
 #[test]
 fn dotenv_path_ignored_lab_checkout_uses_cwd() {
-    let fixture = DotenvPathFixture::new("lab-cli", true);
+    let fixture = DotenvPathFixture::new("jdg-cli", true);
     assert_eq!(fixture.selected(None), fixture.cwd.join(".env"));
     assert!(!fixture.cwd.join(".env").exists());
 }
@@ -154,19 +154,25 @@ fn dotenv_path_explicit_override_is_preserved() {
 
 #[test]
 fn dotenv_path_lab_without_git_uses_home() {
-    let fixture = DotenvPathFixture::new("lab-cli", true);
+    let fixture = DotenvPathFixture::new("jdg-cli", true);
     fs::remove_dir_all(fixture.cwd.join(".git")).unwrap();
     assert_eq!(fixture.selected(None), fixture.fallback());
 }
 
 #[test]
 fn dotenv_path_lab_package_accepts_literal_name_and_comments() {
-    let fixture = DotenvPathFixture::new("lab-cli", true);
+    let fixture = DotenvPathFixture::new("jdg-cli", true);
     fs::write(
         fixture.cwd.join("Cargo.toml"),
-        "[package] # package table\nname = 'lab-cli' # package name\n[package.metadata]\nname = 'other'\n",
+        "[package] # package table\nname = 'jdg-cli' # package name\n[package.metadata]\nname = 'other'\n",
     )
     .unwrap();
+    assert_eq!(fixture.selected(None), fixture.cwd.join(".env"));
+}
+
+#[test]
+fn dotenv_path_legacy_lab_cli_package_uses_cwd() {
+    let fixture = DotenvPathFixture::new("lab-cli", true);
     assert_eq!(fixture.selected(None), fixture.cwd.join(".env"));
 }
 
@@ -175,7 +181,7 @@ fn dotenv_path_fake_package_in_multiline_string_uses_home() {
     let fixture = DotenvPathFixture::new("unrelated-cli", true);
     fs::write(
         fixture.cwd.join("Cargo.toml"),
-        "[package]\nname = 'unrelated-cli'\ndescription = '''\n[package]\nname = 'lab-cli'\n'''\n",
+        "[package]\nname = 'unrelated-cli'\ndescription = '''\n[package]\nname = 'jdg-cli'\n'''\n",
     )
     .unwrap();
     assert_eq!(fixture.selected(None), fixture.fallback());
@@ -1310,7 +1316,7 @@ fn write_lab_manifest(dir: &Path) {
     fs::create_dir_all(dir).unwrap();
     fs::write(
         dir.join("Cargo.toml"),
-        "[package]\nname = \"lab-cli\"\nversion = \"0.1.0\"\n",
+        "[package]\nname = \"jdg-cli\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 }
@@ -1328,13 +1334,13 @@ fn planted_script_in_cwd_ancestor_is_ignored() {
         find_saldeo_auth_script_in(None, None, Some(&cwd), uid).unwrap(),
         None
     );
-    // Nawet gdy przodek wygląda jak pakiet lab-cli: liczy się tylko sam cwd.
+    // Nawet gdy przodek wygląda jak pakiet jdg-cli: liczy się tylko sam cwd.
     write_lab_manifest(&root);
     assert_eq!(
         find_saldeo_auth_script_in(None, None, Some(&cwd), uid).unwrap(),
         None
     );
-    // Sam katalog pakietu lab-cli jest zaufanym miejscem.
+    // Sam katalog pakietu jdg-cli jest zaufanym miejscem.
     let found = find_saldeo_auth_script_in(None, None, Some(&root), uid).unwrap();
     assert_eq!(
         found,

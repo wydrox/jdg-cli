@@ -1,5 +1,5 @@
 [package]
-name = "lab-cli"
+name = "jdg-cli"
 version = "0.1.0"
 edition = "2024"
 description = "LAB (Lazy Accounting Buddy): agent-friendly accounting reconciliation CLI and MCP server"

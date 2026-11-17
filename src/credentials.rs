@@ -549,7 +549,9 @@ pub(crate) fn cwd_is_lab_package(cwd: &Path) -> bool {
         return false;
     }
     let package_header = Regex::new(r"^\[package\]\s*(?:#.*)?$").unwrap();
-    let package_name = Regex::new(r#"^(?:"lab-cli"|'lab-cli')\s*(?:#.*)?$"#).unwrap();
+    // `jdg-cli`, albo `lab-cli` — nazwa pakietu sprzed zmiany nazwy repo.
+    let package_name =
+        Regex::new(r#"^(?:"(?:jdg|lab)-cli"|'(?:jdg|lab)-cli')\s*(?:#.*)?$"#).unwrap();
     let mut in_package = false;
     let mut seen_package = false;
     let mut name_matches = None;

@@ -1053,7 +1053,7 @@ pub(crate) fn npm_install_playwright_command(prefix: &Path, version: &str) -> Co
 
 /// Skrypt `saldeo-auth.sh` tylko z zaufanych miejsc: `SALDEO_AUTH_SCRIPT` (ścieżka
 /// bezwzględna), drzewo katalogów uruchomionego pliku (po rozwinięciu dowiązań) albo
-/// bieżący katalog, gdy jest pakietem `lab-cli`. Nigdy przodkowie bieżącego katalogu.
+/// bieżący katalog, gdy jest pakietem `jdg-cli` (albo dawnym `lab-cli`). Nigdy przodkowie bieżącego katalogu.
 pub(crate) fn find_saldeo_auth_script() -> Result<Option<PathBuf>> {
     let explicit = std::env::var_os("SALDEO_AUTH_SCRIPT").filter(|value| !value.is_empty());
     let exe = std::env::current_exe().ok();

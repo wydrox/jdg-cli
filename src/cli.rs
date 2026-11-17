@@ -37,7 +37,7 @@ pub(crate) fn default_year() -> i32 {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "lab-cli")]
+#[command(name = "jdg-cli")]
 #[command(about = "LAB — Lazy Accounting Buddy", long_about = None)]
 pub(crate) struct Cli {
     /// Dedykowana baza SQLite na rekordy, przebiegi i dopasowania.

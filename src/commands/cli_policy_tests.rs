@@ -12,7 +12,7 @@ impl TempDir {
     fn new(tag: &str) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "lab-cli-policy-{tag}-{}-{}-{}",
+            "jdg-cli-policy-{tag}-{}-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -195,7 +195,7 @@ fn approve_require_mail_env_values() {
 }
 
 fn parse_cli(args: &[&str]) -> Cli {
-    Cli::try_parse_from(std::iter::once("lab-cli").chain(args.iter().copied())).unwrap()
+    Cli::try_parse_from(std::iter::once("jdg-cli").chain(args.iter().copied())).unwrap()
 }
 
 #[test]
@@ -232,7 +232,7 @@ fn cli_approve_and_upload_parse_cap_and_require_mail() {
         other => panic!("unexpected {other:?}"),
     }
     assert!(
-        Cli::try_parse_from(["lab-cli", "approve", "--max-approve", "-1"]).is_err(),
+        Cli::try_parse_from(["jdg-cli", "approve", "--max-approve", "-1"]).is_err(),
         "negative cap must be rejected"
     );
 }
