@@ -114,7 +114,7 @@ def main():
                   if line.startswith("Pages:")), 0)
     if count < 1 or count > args.max_pages:
         raise ValueError(f"PDF ma {count} stron; limit OCR to {args.max_pages}; nie pomijam stron")
-    with tempfile.TemporaryDirectory(prefix="lab-ocr-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="jdg-cli-ocr-") as tmp:
         prefix = Path(tmp) / "page"
         subprocess.run([str(poppler_bin("pdftoppm")), "-scale-to", "1600", "-png", str(pdf), str(prefix)],
                        capture_output=True, timeout=120, check=True, env=env)

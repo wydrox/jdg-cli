@@ -9,6 +9,7 @@ pub(crate) enum OwnNipCheck {
     NotChecked,
 }
 
+// Identyfikator formatu zapisany w danych (cache, rejestr wysyłek) — nie zmieniać.
 const FOUND_MARKER: &str = "lab-own-nip:found";
 const NOT_CHECKED_MARKER: &str = "lab-own-nip:not_checked";
 pub(crate) const NOT_FOUND_WARNING: &str = "Nie znaleziono NIP 5242920020 w odczytanym tekście dokumentu; sprawdź NIP ręcznie przed wysłaniem do Saldeo";

@@ -254,7 +254,7 @@ fn stored_report(score: u8) -> TriReconcileReport {
 #[test]
 fn reconcile_status_returns_stored_timestamp_and_score() {
     let dir = TempDir::new("status");
-    let conn = open_db(&dir.join("lab.sqlite")).unwrap();
+    let conn = open_db(&dir.join("jdg-cli.sqlite")).unwrap();
     let report = stored_report(85);
     store_tri_reconcile_report(&conn, 2024, &report).unwrap();
 
@@ -281,7 +281,7 @@ fn reconcile_status_reads_runs_written_by_an_older_schema() {
     // Kolumny generated_at i review_score są w tri_reconcile_runs od jej powstania;
     // przebieg wstawiony bezpośrednio SQL-em (jak starsza wersja) czyta się bez migracji.
     let dir = TempDir::new("status-old");
-    let conn = open_db(&dir.join("lab.sqlite")).unwrap();
+    let conn = open_db(&dir.join("jdg-cli.sqlite")).unwrap();
     let row = &stored_report(70).rows[0];
     conn.execute(
         "INSERT INTO tri_reconcile_runs (generated_at, year, review_score, mail_count, ksef_count,
@@ -310,7 +310,7 @@ fn reconcile_status_reads_runs_written_by_an_older_schema() {
 #[test]
 fn reconcile_status_row_decode_error_is_an_error() {
     let dir = TempDir::new("status-bad");
-    let conn = open_db(&dir.join("lab.sqlite")).unwrap();
+    let conn = open_db(&dir.join("jdg-cli.sqlite")).unwrap();
     let diff = store_tri_reconcile_report(&conn, 2024, &stored_report(70)).unwrap();
     conn.execute(
         "UPDATE tri_reconcile_rows SET row_json = '{\"status\": 1' WHERE run_id = ?1",
@@ -326,7 +326,7 @@ fn reconcile_status_row_decode_error_is_an_error() {
 #[test]
 fn reconcile_status_bad_stored_timestamp_is_an_error() {
     let dir = TempDir::new("status-ts");
-    let conn = open_db(&dir.join("lab.sqlite")).unwrap();
+    let conn = open_db(&dir.join("jdg-cli.sqlite")).unwrap();
     store_tri_reconcile_report(&conn, 2024, &stored_report(70)).unwrap();
     conn.execute("UPDATE tri_reconcile_runs SET generated_at = 'wczoraj'", [])
         .unwrap();
@@ -378,9 +378,9 @@ fn report_mail_hashes(report: &TriReconcileReport) -> Vec<String> {
 #[test]
 fn reconcile_default_mail_source_keeps_only_issue_year_and_undated_records() {
     let dir = TempDir::new("reconcile-year");
-    let _root = set_test_lab_root(&dir.0);
+    let _root = set_test_jdg_root(&dir.0);
     let (ksef, saldeo, _) = reconcile_year_fixture(&dir);
-    let db = dir.join("lab.sqlite");
+    let db = dir.join("jdg-cli.sqlite");
     let out = dir.join("report.json");
     handle_reconcile_command(
         &db,
@@ -416,13 +416,13 @@ fn reconcile_default_mail_source_keeps_only_issue_year_and_undated_records() {
 #[test]
 fn reconcile_explicit_mail_path_is_used_as_given() {
     let dir = TempDir::new("reconcile-explicit");
-    let _root = set_test_lab_root(&dir.0);
+    let _root = set_test_jdg_root(&dir.0);
     let (ksef, saldeo, mail) = reconcile_year_fixture(&dir);
     let explicit = dir.join("mail.jsonl");
     write_records(&mail, OutputFormat::Jsonl, Some(&explicit)).unwrap();
     let out = dir.join("report.json");
     handle_reconcile_command(
-        &dir.join("lab.sqlite"),
+        &dir.join("jdg-cli.sqlite"),
         false,
         Some(explicit),
         Some(ksef),
@@ -447,7 +447,7 @@ fn reconcile_explicit_mail_path_is_used_as_given() {
 #[test]
 fn reconcile_mail_loader_filters_only_the_default_source() {
     let dir = TempDir::new("reconcile-loader");
-    let _root = set_test_lab_root(&dir.0);
+    let _root = set_test_jdg_root(&dir.0);
     let (_, _, mail) = reconcile_year_fixture(&dir);
     let hashes = |records: Vec<InvoiceRecord>| {
         let mut hashes = records
@@ -517,14 +517,14 @@ fn sync_store_rule_is_shared_and_respects_amazon_mail() {
 #[test]
 fn open_existing_db_refuses_missing_file_and_does_not_create_it() {
     let dir = TempDir::new("ro");
-    let missing = dir.join("typo").join("lab.sqlite");
+    let missing = dir.join("typo").join("jdg-cli.sqlite");
     let message = format!("{:#}", open_existing_db(&missing).unwrap_err());
     assert!(message.contains("nie istnieje"), "{message}");
     assert!(message.contains("typo"), "{message}");
     assert!(!missing.exists());
     assert!(!dir.join("typo").exists());
 
-    let existing = dir.join("lab.sqlite");
+    let existing = dir.join("jdg-cli.sqlite");
     drop(open_db(&existing).unwrap());
     let conn = open_existing_db(&existing).unwrap();
     assert_eq!(db_stats(&conn).unwrap()["tri_reconcile_runs"], 0);

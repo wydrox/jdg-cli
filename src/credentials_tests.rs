@@ -8,7 +8,7 @@ fn temp_root(name: &str) -> PathBuf {
     static NEXT_ROOT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let id = NEXT_ROOT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "lab-credentials-{name}-{}-{id}",
+        "jdg-cli-credentials-{name}-{}-{id}",
         std::process::id()
     ));
     let _ = fs::remove_dir_all(&root);
@@ -96,11 +96,11 @@ impl DotenvPathFixture {
     }
 
     fn selected(&self, override_path: Option<&Path>) -> PathBuf {
-        select_lab_dotenv_path(&self.cwd, &self.home, override_path)
+        select_jdg_dotenv_path(&self.cwd, &self.home, override_path)
     }
 
     fn fallback(&self) -> PathBuf {
-        self.home.join(".config/lab/.env")
+        self.home.join(".config/jdg-cli/.env")
     }
 }
 
@@ -122,7 +122,7 @@ fn dotenv_path_unrelated_rust_project_uses_home() {
 }
 
 #[test]
-fn dotenv_path_lab_checkout_not_ignored_uses_home() {
+fn dotenv_path_jdg_checkout_not_ignored_uses_home() {
     let fixture = DotenvPathFixture::new("jdg-cli", false);
     assert_eq!(fixture.selected(None), fixture.fallback());
 }
@@ -136,7 +136,7 @@ fn dotenv_path_tracked_env_uses_home_even_when_ignored() {
 }
 
 #[test]
-fn dotenv_path_ignored_lab_checkout_uses_cwd() {
+fn dotenv_path_ignored_jdg_checkout_uses_cwd() {
     let fixture = DotenvPathFixture::new("jdg-cli", true);
     assert_eq!(fixture.selected(None), fixture.cwd.join(".env"));
     assert!(!fixture.cwd.join(".env").exists());
@@ -153,14 +153,14 @@ fn dotenv_path_explicit_override_is_preserved() {
 }
 
 #[test]
-fn dotenv_path_lab_without_git_uses_home() {
+fn dotenv_path_jdg_without_git_uses_home() {
     let fixture = DotenvPathFixture::new("jdg-cli", true);
     fs::remove_dir_all(fixture.cwd.join(".git")).unwrap();
     assert_eq!(fixture.selected(None), fixture.fallback());
 }
 
 #[test]
-fn dotenv_path_lab_package_accepts_literal_name_and_comments() {
+fn dotenv_path_jdg_package_accepts_literal_name_and_comments() {
     let fixture = DotenvPathFixture::new("jdg-cli", true);
     fs::write(
         fixture.cwd.join("Cargo.toml"),
@@ -171,9 +171,9 @@ fn dotenv_path_lab_package_accepts_literal_name_and_comments() {
 }
 
 #[test]
-fn dotenv_path_legacy_lab_cli_package_uses_cwd() {
+fn dotenv_path_old_lab_cli_package_uses_home() {
     let fixture = DotenvPathFixture::new("lab-cli", true);
-    assert_eq!(fixture.selected(None), fixture.cwd.join(".env"));
+    assert_eq!(fixture.selected(None), fixture.fallback());
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn set_mode(path: &Path, mode: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
 }
 
-/// Plik sekretów z prawami 600, jak po zapisie przez LAB.
+/// Plik sekretów z prawami 600, jak po zapisie przez jdg-cli.
 fn write_secret_text(path: PathBuf, text: &str) -> Result<()> {
     write_private_file(&path, text.as_bytes())
 }
@@ -205,7 +205,7 @@ fn process_env_wins_and_is_not_written_back() {
         &[("KSEF_TOKEN", "z-sesji")],
         StoreMode::Available,
     );
-    write_lab_env_file(&HashMap::from([(
+    write_jdg_env_file(&HashMap::from([(
         "KSEF_BASE_URL".to_string(),
         "https://api-test.ksef.mf.gov.pl/v2".to_string(),
     )]))
@@ -247,7 +247,7 @@ fn env_file_secret_moves_to_dotenv_and_other_keys_stay() {
     let (root, store, _guard) = setup("migracja", &[], StoreMode::Available);
     write_secret_text(
         root.join("env"),
-        "# LAB\nKSEF_TOKEN='token-ksef'\nKSEF_CERT_PASSWORD='haslo'\nGOOGLE_CLIENT_SECRET_PATH='/tmp/client.json'\nKSEF_BASE_URL='https://api-test.ksef.mf.gov.pl/v2'\nLAB_OCR_MODE='off'\n",
+        "# jdg-cli\nKSEF_TOKEN='token-ksef'\nKSEF_CERT_PASSWORD='haslo'\nGOOGLE_CLIENT_SECRET_PATH='/tmp/client.json'\nKSEF_BASE_URL='https://api-test.ksef.mf.gov.pl/v2'\nJDG_OCR_MODE='off'\n",
     )
     .unwrap();
 
@@ -267,7 +267,7 @@ fn env_file_secret_moves_to_dotenv_and_other_keys_stay() {
     assert!(!text.contains("haslo"));
     assert!(text.contains("GOOGLE_CLIENT_SECRET_PATH='/tmp/client.json'"));
     assert!(text.contains("KSEF_BASE_URL='https://api-test.ksef.mf.gov.pl/v2'"));
-    assert!(text.contains("LAB_OCR_MODE='off'"));
+    assert!(text.contains("JDG_OCR_MODE='off'"));
     assert!(root.join("env").is_file());
     assert_eq!(
         secret_value(Secret::KsefCertPassword).unwrap().as_deref(),
@@ -358,7 +358,7 @@ fn saving_secret_does_not_touch_env_file() {
 }
 
 #[test]
-fn write_lab_env_file_drops_secret_keys() {
+fn write_jdg_env_file_drops_secret_keys() {
     let (root, store, _guard) = setup("czyszczenie", &[], StoreMode::Available);
     let vars = HashMap::from([
         ("KSEF_TOKEN".to_string(), "token-ksef".to_string()),
@@ -368,7 +368,7 @@ fn write_lab_env_file_drops_secret_keys() {
             "/tmp/client.json".to_string(),
         ),
     ]);
-    write_lab_env_file(&vars).unwrap();
+    write_jdg_env_file(&vars).unwrap();
 
     let text = env_file_text(&root);
     assert!(!text.contains("KSEF_TOKEN"));
@@ -521,10 +521,10 @@ fn saldeo_login_pair_needs_both_fields() {
 #[test]
 fn saldeo_login_script_reads_file_not_argv() {
     let script = include_str!("../scripts/saldeo-login.js");
-    assert!(script.contains("LAB_SALDEO_LOGIN_FILE"));
+    assert!(script.contains("JDG_SALDEO_LOGIN_FILE"));
     assert!(script.contains("unlinkSync"));
     assert!(!script.contains("process.argv["));
-    // Hasło tylko z pliku 0600: skrypt nie czyta sekretów LAB ze środowiska.
+    // Hasło tylko z pliku 0600: skrypt nie czyta sekretów jdg-cli ze środowiska.
     for key in SECRET_ENV_KEYS {
         assert!(!script.contains(&format!("process.env.{key}")), "{key}");
     }
@@ -573,7 +573,7 @@ fn leftover_temps(dir: &Path) -> Vec<String> {
         .unwrap()
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.contains(".lab-tmp-"))
+        .filter(|name| name.contains(".jdg-cli-tmp-"))
         .collect()
 }
 
@@ -677,7 +677,7 @@ fn world_readable_dotenv_is_rejected_and_reported_insecure() {
 #[test]
 fn dotenv_symlink_is_checked_on_its_target_and_survives_save() {
     let (root, _store, _guard) = setup("dotenv-link", &[], StoreMode::Unavailable);
-    let store_dir = root.join("config-lab");
+    let store_dir = root.join("config-jdg-cli");
     fs::create_dir_all(&store_dir).unwrap();
     let target = store_dir.join(".env");
     write_secret_text(target.clone(), "KSEF_TOKEN='z-celu'\n").unwrap();
@@ -708,7 +708,7 @@ fn dotenv_symlink_is_checked_on_its_target_and_survives_save() {
 
 #[cfg(unix)]
 #[test]
-fn lab_env_file_problems_are_errors_for_read_modify_write() {
+fn jdg_env_file_problems_are_errors_for_read_modify_write() {
     let (root, _store, _guard) = setup("env-644", &[], StoreMode::Unavailable);
     let env_path = root.join("env");
     write_secret_text(
@@ -717,12 +717,12 @@ fn lab_env_file_problems_are_errors_for_read_modify_write() {
     )
     .unwrap();
     set_mode(&env_path, 0o644);
-    let err = read_lab_env_file().unwrap_err().to_string();
+    let err = read_jdg_env_file().unwrap_err().to_string();
     assert!(err.contains(&env_path.display().to_string()), "{err}");
-    assert_eq!(lab_config_var("KSEF_BASE_URL"), None);
+    assert_eq!(jdg_config_var("KSEF_BASE_URL"), None);
 
     write_private_file(&env_path, b"KSEF_DATA_DIR='/tmp/dane-\xb3'\n").unwrap();
-    let err = format!("{:#}", read_lab_env_file().unwrap_err());
+    let err = format!("{:#}", read_jdg_env_file().unwrap_err());
     assert!(err.contains(&env_path.display().to_string()), "{err}");
     assert_eq!(
         fs::read(&env_path).unwrap(),
@@ -734,7 +734,7 @@ fn lab_env_file_problems_are_errors_for_read_modify_write() {
 fn keychain_hit_is_not_copied_into_dotenv() {
     let (root, store, _guard) = setup(
         "keychain-bez-dotenv",
-        &[("LAB_USE_KEYCHAIN", "1")],
+        &[("JDG_USE_KEYCHAIN", "1")],
         StoreMode::Available,
     );
     store.set(ACCOUNT_KSEF_TOKEN, "z-keychaina").unwrap();
@@ -768,7 +768,7 @@ fn keychain_hit_is_not_copied_into_dotenv() {
 fn keychain_save_reports_where_secret_went() {
     let (root, store, _guard) = setup(
         "keychain-zapis",
-        &[("LAB_USE_KEYCHAIN", "1")],
+        &[("JDG_USE_KEYCHAIN", "1")],
         StoreMode::Available,
     );
     let saved = save_secret(Secret::KsefToken, "token-dummy").unwrap();
@@ -793,7 +793,7 @@ fn keychain_save_reports_where_secret_went() {
 fn keychain_failure_is_not_reported_as_keychain_save() {
     let (root, _store, _guard) = setup(
         "keychain-blad",
-        &[("LAB_USE_KEYCHAIN", "1")],
+        &[("JDG_USE_KEYCHAIN", "1")],
         StoreMode::Failing,
     );
     let saved = save_secret(Secret::KsefToken, "token-dummy").unwrap();
@@ -947,7 +947,7 @@ fn assert_secrets_removed(command: &Command) {
 #[test]
 fn npm_install_has_no_secrets_and_ignores_scripts() {
     let command = npm_install_playwright_command(
-        Path::new("/tmp/lab-prefix-dummy"),
+        Path::new("/tmp/jdg-cli-prefix-dummy"),
         crate::onboard::PLAYWRIGHT_VERSION,
     );
     assert_eq!(command.get_program(), "npm");
@@ -963,11 +963,11 @@ fn npm_install_has_no_secrets_and_ignores_scripts() {
 
 #[test]
 fn saldeo_node_login_gets_password_only_through_file() {
-    let login_file = Path::new("/tmp/lab-saldeo-login-dummy.json");
+    let login_file = Path::new("/tmp/jdg-cli-saldeo-login-dummy.json");
     let command = saldeo_login_node_command(&SaldeoLoginNodeArgs {
-        script: Path::new("/tmp/lab-saldeo-login-script-dummy.js"),
-        node_path: Path::new("/tmp/lab-node-modules-dummy"),
-        target: Path::new("/tmp/lab-storage-dummy.json"),
+        script: Path::new("/tmp/jdg-cli-saldeo-login-script-dummy.js"),
+        node_path: Path::new("/tmp/jdg-cli-node-modules-dummy"),
+        target: Path::new("/tmp/jdg-cli-storage-dummy.json"),
         url: "https://saldeo.example.invalid/",
         helium: "/Applications/Helium.app/Contents/MacOS/Helium",
         timeout_ms: 60_000,
@@ -977,12 +977,12 @@ fn saldeo_node_login_gets_password_only_through_file() {
     assert_secrets_removed(&command);
     let envs = command_envs(&command);
     assert_eq!(
-        envs.get("LAB_SALDEO_LOGIN_FILE"),
+        envs.get("JDG_SALDEO_LOGIN_FILE"),
         Some(&Some(login_file.display().to_string()))
     );
     assert_eq!(
         command_args(&command),
-        ["/tmp/lab-saldeo-login-script-dummy.js"]
+        ["/tmp/jdg-cli-saldeo-login-script-dummy.js"]
     );
 
     let without_login = saldeo_login_node_command(&SaldeoLoginNodeArgs {
@@ -995,14 +995,14 @@ fn saldeo_node_login_gets_password_only_through_file() {
         timeout_ms: 60_000,
     });
     assert_eq!(
-        command_envs(&without_login).get("LAB_SALDEO_LOGIN_FILE"),
+        command_envs(&without_login).get("JDG_SALDEO_LOGIN_FILE"),
         Some(&None)
     );
 }
 
 #[test]
 fn saldeo_auth_shell_script_has_no_secrets_in_env() {
-    let login_file = Path::new("/tmp/lab-saldeo-login-dummy.json");
+    let login_file = Path::new("/tmp/jdg-cli-saldeo-login-dummy.json");
     let command = saldeo_auth_script_command(
         Path::new("/tmp/checkout/scripts/saldeo-auth.sh"),
         Path::new("/tmp/storage.json"),
@@ -1011,12 +1011,12 @@ fn saldeo_auth_shell_script_has_no_secrets_in_env() {
     assert_secrets_removed(&command);
     assert_eq!(command_args(&command), ["/tmp/storage.json"]);
     assert_eq!(
-        command_envs(&command).get("LAB_SALDEO_LOGIN_FILE"),
+        command_envs(&command).get("JDG_SALDEO_LOGIN_FILE"),
         Some(&Some(login_file.display().to_string()))
     );
 }
 
-// ── LAB_NONINTERACTIVE ──────────────────────────────────────────────────────
+// ── JDG_NONINTERACTIVE ──────────────────────────────────────────────────────
 
 #[test]
 fn unattended_expired_session_spawns_nothing() {
@@ -1034,7 +1034,7 @@ fn unattended_expired_session_spawns_nothing() {
     assert!(!spawned.get(), "logowanie nie może się uruchomić");
     let text = format!("{err:#}");
     assert!(text.contains("Saldeo session expired"), "{text}");
-    assert!(text.contains("lab onboard"), "{text}");
+    assert!(text.contains("jdg-cli onboard"), "{text}");
 
     // Ważna sesja: bez błędu także w trybie nienadzorowanym.
     assert!(ensure_saldeo_session_with(None, true, || true, || panic!("spawn")).is_ok());
@@ -1065,10 +1065,10 @@ fn interactive_expired_session_runs_login_once() {
 fn unattended_flag_blocks_browser_and_npm_entry_points() {
     let (root, _store, _guard) = setup(
         "nienadzorowany",
-        &[("LAB_NONINTERACTIVE", "1")],
+        &[("JDG_NONINTERACTIVE", "1")],
         StoreMode::Unavailable,
     );
-    assert!(lab_noninteractive());
+    assert!(jdg_noninteractive());
     let err = format!("{:#}", saldeo_auth_noninteractive().unwrap_err());
     assert!(err.contains("Saldeo session expired"), "{err}");
     let err = format!("{:#}", run_saldeo_auth_script().unwrap_err());
@@ -1080,13 +1080,13 @@ fn unattended_flag_blocks_browser_and_npm_entry_points() {
 #[test]
 fn unattended_flag_is_off_by_default() {
     let (_root, _store, _guard) = setup("interaktywny", &[], StoreMode::Unavailable);
-    assert!(!lab_noninteractive());
+    assert!(!jdg_noninteractive());
     let (_root, _store, _guard) = setup(
         "interaktywny-0",
-        &[("LAB_NONINTERACTIVE", "0")],
+        &[("JDG_NONINTERACTIVE", "0")],
         StoreMode::Unavailable,
     );
-    assert!(!lab_noninteractive());
+    assert!(!jdg_noninteractive());
 }
 
 // ── Migracja env → .env ─────────────────────────────────────────────────────
@@ -1103,16 +1103,16 @@ fn stale_env_file_secret_never_overwrites_newer_dotenv() {
     .unwrap();
 
     // Edycja dowolnego ustawienia jawnego.
-    let mut vars = read_lab_env_file().unwrap();
-    vars.insert("LAB_OCR_MODE".to_string(), "off".to_string());
-    write_lab_env_file(&vars).unwrap();
+    let mut vars = read_jdg_env_file().unwrap();
+    vars.insert("JDG_OCR_MODE".to_string(), "off".to_string());
+    write_jdg_env_file(&vars).unwrap();
 
     // `.env` nietknięty: bez nadpisania starą wartością.
     assert_eq!(dotenv_text(&root), "KSEF_TOKEN='nowy-token'\n");
     let text = env_file_text(&root);
     assert!(!text.contains("KSEF_TOKEN"), "{text}");
     assert!(!text.contains("stary-token"));
-    assert!(text.contains("LAB_OCR_MODE='off'"));
+    assert!(text.contains("JDG_OCR_MODE='off'"));
     assert!(text.contains("KSEF_BASE_URL"));
     assert_eq!(
         secret_value(Secret::KsefToken).unwrap().as_deref(),
@@ -1125,7 +1125,7 @@ fn migration_still_moves_secret_missing_from_dotenv() {
     let (root, _store, _guard) = setup("migracja-brak", &[], StoreMode::Unavailable);
     write_secret_text(root.join(".env"), "OPENROUTER_API_KEY='klucz'\n").unwrap();
     write_secret_text(root.join("env"), "KSEF_TOKEN='jedyny-token'\n").unwrap();
-    write_lab_env_file(&read_lab_env_file().unwrap()).unwrap();
+    write_jdg_env_file(&read_jdg_env_file().unwrap()).unwrap();
     let dotenv = dotenv_text(&root);
     assert!(dotenv.contains("KSEF_TOKEN='jedyny-token'"), "{dotenv}");
     assert!(dotenv.contains("OPENROUTER_API_KEY='klucz'"), "{dotenv}");
@@ -1204,11 +1204,11 @@ fn awkward_secrets_round_trip_through_dotenv() {
             "{value:?} → {:?}",
             dotenv_text(&root)
         );
-        assert_eq!(read_lab_dotenv_keys(&root), ["OPENROUTER_API_KEY"]);
+        assert_eq!(read_jdg_dotenv_keys(&root), ["OPENROUTER_API_KEY"]);
     }
 }
 
-fn read_lab_dotenv_keys(root: &Path) -> Vec<String> {
+fn read_jdg_dotenv_keys(root: &Path) -> Vec<String> {
     let mut keys = parse_env_text(&dotenv_text(root))
         .into_keys()
         .collect::<Vec<_>>();
@@ -1230,7 +1230,7 @@ fn secret_with_newline_or_nul_is_refused() {
     save_secret(Secret::SaldeoStorageState, "{\n  \"cookies\": []\n}\n").unwrap();
     // Jawne ustawienia w env też nie mogą rozbić pliku.
     let vars = HashMap::from([("KSEF_DATA_DIR".to_string(), "/tmp/a\nEVIL=1".to_string())]);
-    assert!(write_lab_env_file(&vars).is_err());
+    assert!(write_jdg_env_file(&vars).is_err());
     assert!(!root.join("env").exists());
 }
 
@@ -1238,7 +1238,7 @@ fn secret_with_newline_or_nul_is_refused() {
 fn keychain_import_strips_one_trailing_line_ending() {
     let (root, store, _guard) = setup(
         "keychain-newline",
-        &[("LAB_USE_KEYCHAIN", "1")],
+        &[("JDG_USE_KEYCHAIN", "1")],
         StoreMode::Available,
     );
     for (stored, expected) in [
@@ -1312,7 +1312,7 @@ fn write_script(path: &Path, mode: u32) {
 }
 
 #[cfg(unix)]
-fn write_lab_manifest(dir: &Path) {
+fn write_jdg_manifest(dir: &Path) {
     fs::create_dir_all(dir).unwrap();
     fs::write(
         dir.join("Cargo.toml"),
@@ -1335,7 +1335,7 @@ fn planted_script_in_cwd_ancestor_is_ignored() {
         None
     );
     // Nawet gdy przodek wygląda jak pakiet jdg-cli: liczy się tylko sam cwd.
-    write_lab_manifest(&root);
+    write_jdg_manifest(&root);
     assert_eq!(
         find_saldeo_auth_script_in(None, None, Some(&cwd), uid).unwrap(),
         None
@@ -1356,15 +1356,15 @@ fn script_next_to_symlinked_executable_is_found() {
     let uid = crate::hardening::current_uid();
     let checkout = root.join("checkout");
     write_script(&checkout.join("scripts/saldeo-auth.sh"), 0o755);
-    let exe = checkout.join("target/release/lab");
+    let exe = checkout.join("target/release/jdg-cli");
     write_script(&exe, 0o755);
     let bin = root.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    std::os::unix::fs::symlink(&exe, bin.join("lab")).unwrap();
+    std::os::unix::fs::symlink(&exe, bin.join("jdg-cli")).unwrap();
     let elsewhere = root.join("elsewhere");
     fs::create_dir_all(&elsewhere).unwrap();
 
-    let found = find_saldeo_auth_script_in(None, Some(&bin.join("lab")), Some(&elsewhere), uid)
+    let found = find_saldeo_auth_script_in(None, Some(&bin.join("jdg-cli")), Some(&elsewhere), uid)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -1379,7 +1379,7 @@ fn script_next_to_symlinked_executable_is_found() {
 fn untrusted_auth_script_is_refused() {
     let root = temp_root("auth-script-untrusted");
     let uid = crate::hardening::current_uid();
-    write_lab_manifest(&root);
+    write_jdg_manifest(&root);
     let script = root.join("scripts/saldeo-auth.sh");
 
     // Zapis dla grupy albo innych.

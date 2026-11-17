@@ -63,7 +63,7 @@ mod macos {
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
 
     fn open_access() -> Option<*mut c_void> {
-        let Ok(desc) = std::ffi::CString::new("lab-cli") else {
+        let Ok(desc) = std::ffi::CString::new("jdg-cli") else {
             return None;
         };
         let cf = unsafe {
@@ -235,7 +235,7 @@ fn encode_keychain_secret(secret: &str) -> String {
     format!("base64:{}", STANDARD.encode(secret))
 }
 
-/// Wartość z prefiksem `base64:` (zapis LAB); inaczej `None` i wartość zostaje dosłowna.
+/// Wartość z prefiksem `base64:` (zapis jdg-cli); inaczej `None` i wartość zostaje dosłowna.
 /// Żadne wydanie nie zapisywało hex, więc np. hasło `12345678` nie jest dekodowane.
 fn decode_keychain_secret(raw: &str) -> Option<String> {
     let encoded = raw.strip_prefix("base64:")?;
@@ -359,7 +359,7 @@ mod tests {
     #[test]
     #[ignore = "tworzy i usuwa wpis w prawdziwym login Keychain; uruchom: cargo test -- --ignored roundtrip_uses_security_framework"]
     fn roundtrip_uses_security_framework() {
-        let account = format!("lab-test-{}", std::process::id());
+        let account = format!("jdg-cli-test-{}", std::process::id());
         macos::delete(KEYCHAIN_SERVICE, &account).unwrap();
         assert!(macos::set(KEYCHAIN_SERVICE, &account, "wartość z polskimi znakami żźć").unwrap());
         assert_eq!(

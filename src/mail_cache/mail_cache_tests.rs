@@ -7,7 +7,7 @@ impl TempDir {
     fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "lab-mail-cache-{}-{}-{}",
+            "jdg-cli-mail-cache-{}-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap(),
             NEXT.fetch_add(1, Ordering::Relaxed)

@@ -10,7 +10,7 @@ fn temp_root(tag: &str) -> PathBuf {
             .unwrap()
             .as_nanos()
     );
-    let root = std::env::temp_dir().join(format!("lab-upload-{tag}-{nonce}"));
+    let root = std::env::temp_dir().join(format!("jdg-cli-upload-{tag}-{nonce}"));
     fs::create_dir_all(&root).unwrap();
     root
 }
@@ -110,7 +110,7 @@ fn ledger_skips_same_file_on_next_plan_and_keeps_used_period() {
     let root = temp_root("ledger");
     let pdf = root.join("faktura.pdf");
     fs::write(&pdf, b"%PDF-1.4 bez numeru faktury").unwrap();
-    let db = root.join("lab.sqlite");
+    let db = root.join("jdg-cli.sqlite");
     let today = date(2026, 10, 5);
     // Brak numeru faktury: fuzzy-match z kopią w Saldeo nie przekroczy progu.
     let report = write_report(
@@ -193,7 +193,7 @@ fn unconfirmed_upload_is_ledgered_and_never_retried() {
     let root = temp_root("unconfirmed");
     let pdf = root.join("faktura.pdf");
     fs::write(&pdf, b"%PDF unconfirmed").unwrap();
-    let db = root.join("lab.sqlite");
+    let db = root.join("jdg-cli.sqlite");
     let today = date(2026, 10, 5);
     let report = write_report(
         &root,
@@ -249,7 +249,7 @@ fn ledger_check_at_upload_time_covers_plans_built_without_it() {
     let b = root.join("b.pdf");
     fs::write(&a, b"%PDF same").unwrap();
     fs::write(&b, b"%PDF same").unwrap();
-    let conn = open_db(&root.join("lab.sqlite")).unwrap();
+    let conn = open_db(&root.join("jdg-cli.sqlite")).unwrap();
     let items = [&a, &b]
         .into_iter()
         .map(|path| {
@@ -283,7 +283,7 @@ fn failed_upload_is_not_ledgered_and_stays_retryable() {
     let root = temp_root("failed");
     let pdf = root.join("f.pdf");
     fs::write(&pdf, b"%PDF failed").unwrap();
-    let db = root.join("lab.sqlite");
+    let db = root.join("jdg-cli.sqlite");
     let today = date(2026, 10, 5);
     let report = write_report(
         &root,
@@ -315,7 +315,7 @@ fn ledger_write_failure_aborts_remaining_uploads() {
     let b = root.join("b.pdf");
     fs::write(&a, b"%PDF a").unwrap();
     fs::write(&b, b"%PDF b").unwrap();
-    let conn = open_db(&root.join("lab.sqlite")).unwrap();
+    let conn = open_db(&root.join("jdg-cli.sqlite")).unwrap();
     let items = [&a, &b]
         .into_iter()
         .map(|path| {
@@ -373,7 +373,7 @@ fn upload_period_follows_plan_year_and_undated_rule() {
     fs::write(&december, b"%PDF dec").unwrap();
     fs::write(&undated, b"%PDF none").unwrap();
     fs::write(&january, b"%PDF jan").unwrap();
-    let db = root.join("lab.sqlite");
+    let db = root.join("jdg-cli.sqlite");
     let report = write_report(
         &root,
         vec![
@@ -529,14 +529,19 @@ fn empty_saldeo_blocks_upload_unless_allowed() {
         &root,
         vec![mail_row(mail_record(&pdf, Some(date(2026, 4, 1))))],
     );
-    let plan = plan_for(&report, &root.join("lab.sqlite"), 2026, date(2026, 10, 5));
+    let plan = plan_for(
+        &report,
+        &root.join("jdg-cli.sqlite"),
+        2026,
+        date(2026, 10, 5),
+    );
     assert_eq!(plan.saldeo_record_count, Some(0));
     assert_eq!(plan.summary.uploadable_count, 1);
     if !saldeo_allow_empty_from_env() {
         assert!(
             plan.warnings
                 .iter()
-                .any(|w| w.contains("LAB_ALLOW_EMPTY_SALDEO"))
+                .any(|w| w.contains("JDG_ALLOW_EMPTY_SALDEO"))
         );
     }
     let _ = fs::remove_dir_all(root);

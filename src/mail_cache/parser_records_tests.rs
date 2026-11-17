@@ -3,8 +3,10 @@ use super::*;
 const OWN_NIP: &str = "5242920020";
 
 fn scratch_dir(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("lab-parser-records-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "jdg-cli-parser-records-{name}-{}",
+        std::process::id()
+    ));
     fs::create_dir_all(&dir).unwrap();
     dir
 }

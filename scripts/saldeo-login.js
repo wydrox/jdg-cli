@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Logowanie Saldeo: najpierw istniejący profil Helium, potem formularz z pliku 0600.
-// Hasło tylko z LAB_SALDEO_LOGIN_FILE.
+// Hasło tylko z JDG_SALDEO_LOGIN_FILE.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -36,8 +36,8 @@ function sleep(ms) {
 }
 
 const SALDEO_SEARCH_URL = "https://saldeo.brainshare.pl/rest/client/document/list/search";
-const TEMP_PROFILE_PREFIX = "lab-helium-";
-// Pozostałości po procesie zabitym SIGKILL (np. limit czasu w `lab`) sprząta następny start.
+const TEMP_PROFILE_PREFIX = "jdg-cli-helium-";
+// Pozostałości po procesie zabitym SIGKILL (np. limit czasu w `jdg-cli`) sprząta następny start.
 const STALE_TEMP_PROFILE_MS = 6 * 60 * 60 * 1000;
 
 // RFC 6265: Playwright zapisuje ciasteczka host-only bez wiodącej kropki.
@@ -344,21 +344,21 @@ function authTimeoutMs(raw) {
 // Zwraca kod wyjścia: 0 = sesja zapisana, 2 = brak ważnej sesji.
 async function main() {
   const { chromium } = require("playwright");
-  const out = process.env.LAB_SALDEO_STORAGE_STATE;
+  const out = process.env.JDG_SALDEO_STORAGE_STATE;
   if (!out) {
-    throw new Error("brak LAB_SALDEO_STORAGE_STATE");
+    throw new Error("brak JDG_SALDEO_STORAGE_STATE");
   }
   const url = process.env.SALDEO_URL || "https://saldeo.brainshare.pl/";
   const executablePath = process.env.HELIUM_EXECUTABLE;
   const timeoutMs = authTimeoutMs(process.env.SALDEO_AUTH_TIMEOUT_MS);
-  // `lab` zabija proces (SIGKILL) po timeoutMs + 20 s; kończymy wcześniej, żeby posprzątać.
+  // `jdg-cli` zabija proces (SIGKILL) po timeoutMs + 20 s; kończymy wcześniej, żeby posprzątać.
   // Timer nie jest `unref`: każde wyjście i tak idzie przez `shutdown` → `process.exit`.
   setTimeout(() => {
     shutdown(2, `Saldeo auth: przekroczony limit ${Math.round(timeoutMs / 1000)}s`);
   }, timeoutMs + 10000);
-  const login = readLoginFile(process.env.LAB_SALDEO_LOGIN_FILE || "");
+  const login = readLoginFile(process.env.JDG_SALDEO_LOGIN_FILE || "");
   const headless = process.env.SALDEO_AUTH_HEADLESS === "1";
-  const userDataDir = path.join(os.homedir(), ".config", "lab", "helium-profile");
+  const userDataDir = path.join(os.homedir(), ".config", "jdg-cli", "helium-profile");
   fs.mkdirSync(userDataDir, { recursive: true });
   sweepStaleTempProfiles();
   const launchOptions = {

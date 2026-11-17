@@ -628,7 +628,7 @@ mod tri_store_tests;
 pub(crate) fn open_existing_db(path: &Path) -> Result<Connection> {
     if !path.is_file() {
         return Err(anyhow!(
-            "baza SQLite {} nie istnieje — sprawdź --db (baza powstaje przy `lab db init`, `lab sync` albo `lab reconcile --store`)",
+            "baza SQLite {} nie istnieje — sprawdź --db (baza powstaje przy `jdg-cli db init`, `jdg-cli sync` albo `jdg-cli reconcile --store`)",
             path.display()
         ));
     }

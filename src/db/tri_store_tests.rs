@@ -15,8 +15,8 @@ impl TempDb {
                 .unwrap()
                 .as_nanos()
         );
-        let root = std::env::temp_dir().join(format!("lab-tri-store-{tag}-{nonce}"));
-        let conn = open_db(&root.join("lab.sqlite")).unwrap();
+        let root = std::env::temp_dir().join(format!("jdg-cli-tri-store-{tag}-{nonce}"));
+        let conn = open_db(&root.join("jdg-cli.sqlite")).unwrap();
         Self { root, conn }
     }
 

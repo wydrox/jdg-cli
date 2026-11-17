@@ -372,13 +372,13 @@ pub(crate) fn sync_reconcile_metadata_with_progress(
     Ok(())
 }
 
-// Domyślne katalogi danych leżą w katalogu LAB (`lab_root`), nie w bieżącym katalogu.
+// Domyślne katalogi danych leżą w katalogu jdg-cli (`jdg_root`), nie w bieżącym katalogu.
 pub(crate) fn default_mail_out_path(year: i32) -> PathBuf {
-    lab_path(format!("data/mail-all-pdf-{year}-pdfs"))
+    jdg_path(format!("data/mail-all-pdf-{year}-pdfs"))
 }
 
 pub(crate) fn default_amazon_mail_out_path(year: i32) -> PathBuf {
-    lab_path(format!("data/mail-amazon-{year}-pdfs"))
+    jdg_path(format!("data/mail-amazon-{year}-pdfs"))
 }
 
 pub(crate) fn default_mail_candidates_path(year: i32) -> PathBuf {
@@ -392,7 +392,7 @@ pub(crate) fn default_amazon_mail_candidates_path(year: i32) -> PathBuf {
 }
 
 pub(crate) fn default_saldeo_out_path(year: i32) -> PathBuf {
-    lab_path(format!("data/saldeo-{year}"))
+    jdg_path(format!("data/saldeo-{year}"))
 }
 
 pub(crate) fn default_saldeo_records_path(year: i32) -> PathBuf {
@@ -400,12 +400,12 @@ pub(crate) fn default_saldeo_records_path(year: i32) -> PathBuf {
 }
 
 pub(crate) fn default_ksef_out_path(year: i32) -> PathBuf {
-    lab_path(format!("data/ksef-{year}"))
+    jdg_path(format!("data/ksef-{year}"))
 }
 
-/// Względny `KSEF_DATA_DIR` jest liczony od katalogu LAB.
+/// Względny `KSEF_DATA_DIR` jest liczony od katalogu jdg-cli.
 pub(crate) fn configured_ksef_out_path(year: i32) -> PathBuf {
-    lab_config_var("KSEF_DATA_DIR")
-        .map(|dir| ksef_data_dir_year_path(&lab_path(dir), year))
+    jdg_config_var("KSEF_DATA_DIR")
+        .map(|dir| ksef_data_dir_year_path(&jdg_path(dir), year))
         .unwrap_or_else(|| default_ksef_out_path(year))
 }

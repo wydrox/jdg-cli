@@ -40,7 +40,7 @@ pub(crate) fn onboard(
     let mut gmail_client_secret = gmail_client_secret.map(Path::to_path_buf);
     let mut status = collect_onboard_status(db_path)?;
 
-    eprintln!("LAB — konfiguracja środowiska\n");
+    eprintln!("jdg-cli — konfiguracja środowiska\n");
     print_onboard_status(&status, db_path);
 
     if check {
@@ -52,7 +52,7 @@ pub(crate) fn onboard(
         let items = onboard_menu_items(&status, db_path, gmail_client_secret.as_deref());
         let exit_index = items.len() - 1;
         let selection = Select::with_theme(&theme)
-            .with_prompt("Wszystkie parametry LAB — wybierz pozycję do edycji")
+            .with_prompt("Wszystkie parametry jdg-cli — wybierz pozycję do edycji")
             .items(&items)
             .default(exit_index)
             .interact()?;
@@ -107,7 +107,7 @@ pub(crate) fn onboard_menu_items(
             "GOOGLE_CLIENT_SECRET_PATH — {}",
             gmail_client_secret
                 .map(|p| p.display().to_string())
-                .or_else(|| lab_config_var("GOOGLE_CLIENT_SECRET_PATH"))
+                .or_else(|| jdg_config_var("GOOGLE_CLIENT_SECRET_PATH"))
                 .unwrap_or_else(|| "(puste; potrzebne do auto-refresh Gmail)".to_string())
         ),
         format!(
@@ -220,12 +220,12 @@ pub(crate) fn collect_onboard_status(db_path: &Path) -> Result<OnboardStatus> {
             .map(|mut d| d.any(|e| e.is_ok()))
             .unwrap_or(false);
 
-    let ksef_cert = lab_config_var("KSEF_CERT_PATH");
+    let ksef_cert = jdg_config_var("KSEF_CERT_PATH");
     let ksef_cert_ok = ksef_cert
         .as_ref()
         .map(|p| Path::new(p).exists())
         .unwrap_or(false);
-    let ksef_key = lab_config_var("KSEF_KEY_PATH");
+    let ksef_key = jdg_config_var("KSEF_KEY_PATH");
     let ksef_key_ok = ksef_key
         .as_ref()
         .map(|p| Path::new(p).exists())
@@ -287,7 +287,7 @@ fn secret_status_entry(source: &SecretSource) -> Value {
     entry
 }
 
-/// Skąd LAB wziął sekret; do wydruku statusu, nigdy z wartością.
+/// Skąd jdg-cli wziął sekret; do wydruku statusu, nigdy z wartością.
 pub(crate) fn secret_source_suffix(source: &SecretSource) -> String {
     match source {
         SecretSource::Env => " (zmienna sesji)".to_string(),
@@ -299,9 +299,9 @@ pub(crate) fn secret_source_suffix(source: &SecretSource) -> String {
 }
 
 pub(crate) fn print_onboard_status(status: &OnboardStatus, db_path: &Path) {
-    let root = lab_root_info();
+    let root = jdg_root_info();
     eprintln!(
-        "  Katalog LAB:     {} ({})",
+        "  Katalog jdg-cli:     {} ({})",
         root.path.display(),
         root.source.as_str()
     );
@@ -439,16 +439,16 @@ pub(crate) fn onboard_next_steps(status: &OnboardStatus, gmail_ok: bool) -> Vec<
         steps.push("Zainstaluj openssl/libressl CLI potrzebny do szyfrowania tokenu KSeF");
     }
     if !gmail_ok {
-        steps.push("lab onboard --gmail-client-secret <ścieżka>");
+        steps.push("jdg-cli onboard --gmail-client-secret <ścieżka>");
     }
     if !status.saldeo_valid {
         if secret_is_set(Secret::SaldeoUsername) && secret_is_set(Secret::SaldeoPassword) {
             steps.push(
-                "Sesja Saldeo wygasła. Odśwież ją: Menu → Saldeo, albo otwórz tabelę LAB — zaloguje Helium zapisanym hasłem",
+                "Sesja Saldeo wygasła. Odśwież ją: Menu → Saldeo, albo otwórz tabelę jdg-cli — zaloguje Helium zapisanym hasłem",
             );
         } else {
             steps.push(
-                "Ustaw SALDEO_USERNAME i SALDEO_PASSWORD w lab onboard, albo odśwież sesję Helium",
+                "Ustaw SALDEO_USERNAME i SALDEO_PASSWORD w jdg-cli onboard, albo odśwież sesję Helium",
             );
         }
     }
@@ -456,10 +456,12 @@ pub(crate) fn onboard_next_steps(status: &OnboardStatus, gmail_ok: bool) -> Vec<
         steps.push("Ustaw KSEF_TOKEN z uprawnieniem InvoiceRead");
     }
     if !status.ksef_data_exists {
-        steps.push("Uruchom lab sync --ksef, żeby pobrać metadane KSeF online do lokalnego cache");
+        steps.push(
+            "Uruchom jdg-cli sync --ksef, żeby pobrać metadane KSeF online do lokalnego cache",
+        );
     }
     if steps.is_empty() {
-        steps.push("Wszystko gotowe. Uruchom: lab sync");
+        steps.push("Wszystko gotowe. Uruchom: jdg-cli sync");
     }
     steps
 }
@@ -517,17 +519,17 @@ pub(crate) fn onboard_configure_gmail(
 
     *gmail_client_secret = Some(secret.clone());
     // Nieczytelny plik env to błąd, nie pusta mapa: zapis nie może skasować innych kluczy.
-    let mut vars = read_lab_env_file()?;
+    let mut vars = read_jdg_env_file()?;
     vars.insert(
         "GOOGLE_CLIENT_SECRET_PATH".to_string(),
         secret.display().to_string(),
     );
-    write_lab_env_file(&vars)?;
+    write_jdg_env_file(&vars)?;
     match gmail_auth(&secret, &default_gmail_token_path(), false) {
         Ok(result) => eprintln!(
             "✓ Gmail skonfigurowany. Token: {}\n✓ GOOGLE_CLIENT_SECRET_PATH zapisany w {}\n",
             result.token_file,
-            lab_env_file_path().display()
+            jdg_env_file_path().display()
         ),
         Err(err) => eprintln!("✗ Błąd autoryzacji: {err}\n"),
     }
@@ -599,7 +601,7 @@ pub(crate) fn save_saldeo_login(username: &str, password: &str) -> Result<String
     if password.is_empty() {
         if !secret_is_set(Secret::SaldeoPassword) {
             return Ok(
-                "⏭ Hasło puste i brak zapisanego SALDEO_PASSWORD; SALDEO_USERNAME nie został zapisany (LAB zaloguje ręcznie w Helium)."
+                "⏭ Hasło puste i brak zapisanego SALDEO_PASSWORD; SALDEO_USERNAME nie został zapisany (jdg-cli zaloguje ręcznie w Helium)."
                     .to_string(),
             );
         }
@@ -621,11 +623,11 @@ pub(crate) fn save_saldeo_login(username: &str, password: &str) -> Result<String
 }
 
 pub(crate) fn onboard_edit_env_path(name: &str) -> Result<()> {
-    if let Some(value) = prompt_env_path(name, lab_config_var(name))? {
-        let mut vars = read_lab_env_file()?;
+    if let Some(value) = prompt_env_path(name, jdg_config_var(name))? {
+        let mut vars = read_jdg_env_file()?;
         vars.insert(name.to_string(), value);
-        write_lab_env_file(&vars)?;
-        eprintln!("✓ Zapisano {name} w {}\n", lab_env_file_path().display());
+        write_jdg_env_file(&vars)?;
+        eprintln!("✓ Zapisano {name} w {}\n", jdg_env_file_path().display());
     } else {
         eprintln!("⏭ Bez zmian.\n");
     }
@@ -634,7 +636,7 @@ pub(crate) fn onboard_edit_env_path(name: &str) -> Result<()> {
 
 pub(crate) fn onboard_edit_env_secret(name: &str) -> Result<()> {
     let secret = Secret::from_env_key(name)
-        .ok_or_else(|| anyhow!("{name} nie jest sekretem LAB; użyj edycji ścieżki"))?;
+        .ok_or_else(|| anyhow!("{name} nie jest sekretem jdg-cli; użyj edycji ścieżki"))?;
     let current = secret_is_set(secret);
     let prompt = if current {
         format!("{name} (ustawione; puste = bez zmian)")
@@ -657,19 +659,19 @@ pub(crate) fn onboard_edit_env_secret(name: &str) -> Result<()> {
 pub(crate) fn ensure_saldeo_session_or_auth(progress: Option<Arc<Mutex<String>>>) -> Result<()> {
     ensure_saldeo_session_with(
         progress,
-        lab_noninteractive(),
+        jdg_noninteractive(),
         || saldeo_session_valid(&default_saldeo_storage_state_path()),
         saldeo_auth_noninteractive,
     )
 }
 
-/// Komunikat dla przebiegu bez użytkownika; `scripts/lab-automation.sh` szuka frazy
+/// Komunikat dla przebiegu bez użytkownika; `scripts/jdg-cli-automation.sh` szuka frazy
 /// „Saldeo session expired”, więc nie zmieniaj jej.
-pub(crate) const SALDEO_SESSION_EXPIRED_UNATTENDED: &str = "Saldeo session expired: przy LAB_NONINTERACTIVE=1 LAB nie otwiera Helium i nie instaluje Playwright. Odśwież sesję interaktywnie: lab onboard (Saldeo auth)";
+pub(crate) const SALDEO_SESSION_EXPIRED_UNATTENDED: &str = "Saldeo session expired: przy JDG_NONINTERACTIVE=1 jdg-cli nie otwiera Helium i nie instaluje Playwright. Odśwież sesję interaktywnie: jdg-cli onboard (Saldeo auth)";
 
-/// Przy `LAB_NONINTERACTIVE=1` błąd zamiast logowania w przeglądarce i `npm install`.
+/// Przy `JDG_NONINTERACTIVE=1` błąd zamiast logowania w przeglądarce i `npm install`.
 fn refuse_unattended_saldeo_login() -> Result<()> {
-    if lab_noninteractive() {
+    if jdg_noninteractive() {
         return Err(anyhow!(SALDEO_SESSION_EXPIRED_UNATTENDED));
     }
     Ok(())
@@ -723,7 +725,7 @@ impl SaldeoAuthTempFile {
         static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         std::env::temp_dir().join(format!(
-            "lab-saldeo-{name}-{}-{id}.{extension}",
+            "jdg-cli-saldeo-{name}-{}-{id}.{extension}",
             std::process::id()
         ))
     }
@@ -824,15 +826,15 @@ pub(crate) struct SaldeoLoginNodeArgs<'a> {
     pub(crate) login_file: Option<&'a Path>,
 }
 
-/// `node saldeo-login.js`: hasło tylko w pliku 0600 (`LAB_SALDEO_LOGIN_FILE`),
-/// sekrety LAB usunięte ze środowiska.
+/// `node saldeo-login.js`: hasło tylko w pliku 0600 (`JDG_SALDEO_LOGIN_FILE`),
+/// sekrety jdg-cli usunięte ze środowiska.
 pub(crate) fn saldeo_login_node_command(args: &SaldeoLoginNodeArgs<'_>) -> Command {
     let mut command = Command::new("node");
     crate::hardening::remove_secret_env(&mut command);
     command
         .arg(args.script)
         .env("NODE_PATH", args.node_path)
-        .env("LAB_SALDEO_STORAGE_STATE", args.target)
+        .env("JDG_SALDEO_STORAGE_STATE", args.target)
         .env("SALDEO_URL", args.url)
         .env("HELIUM_EXECUTABLE", args.helium)
         .env("SALDEO_AUTH_TIMEOUT_MS", args.timeout_ms.to_string())
@@ -840,8 +842,8 @@ pub(crate) fn saldeo_login_node_command(args: &SaldeoLoginNodeArgs<'_>) -> Comma
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     match args.login_file {
-        Some(path) => command.env("LAB_SALDEO_LOGIN_FILE", path),
-        None => command.env_remove("LAB_SALDEO_LOGIN_FILE"),
+        Some(path) => command.env("JDG_SALDEO_LOGIN_FILE", path),
+        None => command.env_remove("JDG_SALDEO_LOGIN_FILE"),
     };
     command
 }
@@ -906,7 +908,7 @@ pub(crate) fn run_saldeo_auth_script() -> Result<()> {
     }
 
     if let Some(script) = script {
-        // Hasło idzie plikiem 0600 (LAB_SALDEO_LOGIN_FILE), nie przez środowisko skryptu.
+        // Hasło idzie plikiem 0600 (JDG_SALDEO_LOGIN_FILE), nie przez środowisko skryptu.
         let login_file = write_saldeo_login_file(saldeo_login_pair()?.as_ref())?;
         let status = saldeo_auth_script_command(
             &script,
@@ -943,7 +945,7 @@ fn write_saldeo_login_file(login: Option<&(String, String)>) -> Result<Option<Sa
     .map(Some)
 }
 
-/// Skrypt `saldeo-auth.sh` bez sekretów LAB w środowisku; login tylko przez plik 0600.
+/// Skrypt `saldeo-auth.sh` bez sekretów jdg-cli w środowisku; login tylko przez plik 0600.
 pub(crate) fn saldeo_auth_script_command(
     script: &Path,
     target: &Path,
@@ -957,31 +959,31 @@ pub(crate) fn saldeo_auth_script_command(
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     match login_file {
-        Some(path) => command.env("LAB_SALDEO_LOGIN_FILE", path),
-        None => command.env_remove("LAB_SALDEO_LOGIN_FILE"),
+        Some(path) => command.env("JDG_SALDEO_LOGIN_FILE", path),
+        None => command.env_remove("JDG_SALDEO_LOGIN_FILE"),
     };
     command
 }
 
-fn lab_playwright_prefix() -> PathBuf {
-    if let Some(path) = std::env::var_os("LAB_PLAYWRIGHT_PREFIX") {
+fn jdg_playwright_prefix() -> PathBuf {
+    if let Some(path) = std::env::var_os("JDG_PLAYWRIGHT_PREFIX") {
         return PathBuf::from(path);
     }
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("playwright")
 }
 
 /// Wersja Playwright instalowana dla logowania Saldeo (ta sama w `scripts/saldeo-auth.sh`).
 pub(crate) const PLAYWRIGHT_VERSION: &str = "1.63.0";
 
-/// `LAB_PLAYWRIGHT_VERSION` albo [`PLAYWRIGHT_VERSION`]; dozwolone litery, cyfry, `.` i `-`
+/// `JDG_PLAYWRIGHT_VERSION` albo [`PLAYWRIGHT_VERSION`]; dozwolone litery, cyfry, `.` i `-`
 /// (wersja albo dist-tag), żeby wartość nie stała się innym specyfikatorem npm.
 pub(crate) fn playwright_version_from(value: Option<&str>) -> Result<String> {
-    // Jak `${LAB_PLAYWRIGHT_VERSION:-…}` w skrypcie: pusta wartość = domyślna.
+    // Jak `${JDG_PLAYWRIGHT_VERSION:-…}` w skrypcie: pusta wartość = domyślna.
     let Some(value) = value.filter(|v| !v.is_empty()) else {
         return Ok(PLAYWRIGHT_VERSION.to_string());
     };
@@ -995,7 +997,7 @@ pub(crate) fn playwright_version_from(value: Option<&str>) -> Result<String> {
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
     if !valid {
         return Err(anyhow!(
-            "LAB_PLAYWRIGHT_VERSION: oczekuję wersji albo dist-tagu (litery, cyfry, '.', '-'), dostałem {value:?}"
+            "JDG_PLAYWRIGHT_VERSION: oczekuję wersji albo dist-tagu (litery, cyfry, '.', '-'), dostałem {value:?}"
         ));
     }
     Ok(value.to_string())
@@ -1003,14 +1005,14 @@ pub(crate) fn playwright_version_from(value: Option<&str>) -> Result<String> {
 
 fn ensure_playwright_node_path() -> Result<PathBuf> {
     refuse_unattended_saldeo_login()?;
-    let prefix = lab_playwright_prefix();
+    let prefix = jdg_playwright_prefix();
     let node_modules = prefix.join("node_modules");
     let module = node_modules.join("playwright");
     // Zainstalowana wersja zostaje, nawet jeśli inna niż przypięta: bez wymuszonej reinstalacji.
     if module.is_dir() {
         return Ok(node_modules);
     }
-    let version = playwright_version_from(std::env::var("LAB_PLAYWRIGHT_VERSION").ok().as_deref())?;
+    let version = playwright_version_from(std::env::var("JDG_PLAYWRIGHT_VERSION").ok().as_deref())?;
     crate::hardening::create_dir_for_private_files(&prefix)?;
     eprintln!(
         "  [Saldeo] instaluję Playwright {version} w {} (bez przeglądarki Playwright)...",
@@ -1030,7 +1032,7 @@ fn ensure_playwright_node_path() -> Result<PathBuf> {
     Ok(node_modules)
 }
 
-/// `npm install playwright@<version>` bez skryptów pakietów i bez sekretów LAB w środowisku.
+/// `npm install playwright@<version>` bez skryptów pakietów i bez sekretów jdg-cli w środowisku.
 pub(crate) fn npm_install_playwright_command(prefix: &Path, version: &str) -> Command {
     // stdout bywa strumieniem JSON-RPC serwera MCP: wyjście npm idzie na stderr,
     // a npm nie czyta stdin.
@@ -1053,7 +1055,7 @@ pub(crate) fn npm_install_playwright_command(prefix: &Path, version: &str) -> Co
 
 /// Skrypt `saldeo-auth.sh` tylko z zaufanych miejsc: `SALDEO_AUTH_SCRIPT` (ścieżka
 /// bezwzględna), drzewo katalogów uruchomionego pliku (po rozwinięciu dowiązań) albo
-/// bieżący katalog, gdy jest pakietem `jdg-cli` (albo dawnym `lab-cli`). Nigdy przodkowie bieżącego katalogu.
+/// bieżący katalog, gdy jest pakietem `jdg-cli`. Nigdy przodkowie bieżącego katalogu.
 pub(crate) fn find_saldeo_auth_script() -> Result<Option<PathBuf>> {
     let explicit = std::env::var_os("SALDEO_AUTH_SCRIPT").filter(|value| !value.is_empty());
     let exe = std::env::current_exe().ok();
@@ -1092,7 +1094,7 @@ pub(crate) fn find_saldeo_auth_script_in(
         roots.extend(parent.ancestors().map(Path::to_path_buf));
     }
     if let Some(cwd) = cwd
-        && crate::credentials::cwd_is_lab_package(cwd)
+        && crate::credentials::cwd_is_jdg_package(cwd)
     {
         roots.push(cwd.to_path_buf());
     }
@@ -1158,22 +1160,22 @@ pub(crate) fn onboard_configure_ksef_data(current_year: i32) -> Result<()> {
         fs::create_dir_all(&dir).with_context(|| format!("mkdir {}", dir.display()))?;
         eprintln!("✓ Utworzono: {}", dir.display());
     }
-    let mut vars = read_lab_env_file()?;
+    let mut vars = read_jdg_env_file()?;
     vars.insert("KSEF_DATA_DIR".to_string(), dir.display().to_string());
-    write_lab_env_file(&vars)?;
+    write_jdg_env_file(&vars)?;
     eprintln!(
         "✓ Zapisano KSEF_DATA_DIR w {}",
-        lab_env_file_path().display()
+        jdg_env_file_path().display()
     );
     eprintln!("Umieść eksport KSeF w: {}", dir.display());
     eprintln!(
-        "Synchronizacja: lab sync --ksef --year {year} --ksef-input {}\n",
+        "Synchronizacja: jdg-cli sync --ksef --year {year} --ksef-input {}\n",
         dir.display()
     );
     Ok(())
 }
 
-pub(crate) fn lab_config_var(name: &str) -> Option<String> {
+pub(crate) fn jdg_config_var(name: &str) -> Option<String> {
     if let Some(secret) = Secret::from_env_key(name) {
         return secret_value(secret).ok().flatten();
     }
@@ -1181,15 +1183,15 @@ pub(crate) fn lab_config_var(name: &str) -> Option<String> {
         .ok()
         .filter(|v| !v.trim().is_empty())
         .or_else(|| crate::dotenv_secret(name))
-        .or_else(|| lab_env_file_value(name))
+        .or_else(|| jdg_env_file_value(name))
 }
 
-/// Zwykły odczyt z `~/.config/lab/env`; problem z plikiem = brak wartości i komunikat na stderr.
-fn lab_env_file_value(name: &str) -> Option<String> {
-    match read_lab_env_file() {
+/// Zwykły odczyt z `~/.config/jdg-cli/env`; problem z plikiem = brak wartości i komunikat na stderr.
+fn jdg_env_file_value(name: &str) -> Option<String> {
+    match read_jdg_env_file() {
         Ok(mut vars) => vars.remove(name),
         Err(err) => {
-            crate::warn_unreadable_secret_file(&lab_env_file_path(), &err);
+            crate::warn_unreadable_secret_file(&jdg_env_file_path(), &err);
             None
         }
     }
@@ -1200,11 +1202,11 @@ pub(crate) fn preferred_saldeo_storage_state_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("saldeo-storage-state.json")
 }
 
-pub(crate) fn lab_env_file_path() -> PathBuf {
+pub(crate) fn jdg_env_file_path() -> PathBuf {
     #[cfg(test)]
     if let Some(path) = credentials::test_env_file_path() {
         return path;
@@ -1213,24 +1215,24 @@ pub(crate) fn lab_env_file_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("env")
 }
 
 /// Brak pliku = pusta mapa. Prawa szersze niż 600, błąd odczytu albo tekst spoza UTF-8
 /// to błąd ze ścieżką; wywołujący odczyt-modyfikację-zapis nie może wtedy nic zapisać.
-pub(crate) fn read_lab_env_file() -> Result<HashMap<String, String>> {
-    crate::read_private_env_file(&lab_env_file_path(), "plik env LAB")
+pub(crate) fn read_jdg_env_file() -> Result<HashMap<String, String>> {
+    crate::read_private_env_file(&jdg_env_file_path(), "plik env jdg-cli")
 }
 
-pub(crate) fn write_lab_env_file(vars: &HashMap<String, String>) -> Result<()> {
+pub(crate) fn write_jdg_env_file(vars: &HashMap<String, String>) -> Result<()> {
     let mut vars = vars.clone();
     strip_secret_env_keys(&mut vars)?;
-    let path = lab_env_file_path();
+    let path = jdg_env_file_path();
     let mut keys = vars.keys().cloned().collect::<Vec<_>>();
     keys.sort();
     let mut out = String::from(
-        "# LAB local environment. Source it with: set -a; source ~/.config/lab/env; set +a\n",
+        "# jdg-cli local environment. Source it with: set -a; source ~/.config/jdg-cli/env; set +a\n",
     );
     for key in keys {
         if let Some(value) = vars.get(&key) {
@@ -1334,15 +1336,15 @@ pub(crate) fn saldeo_session_valid(storage_state: &Path) -> bool {
 
 /// Notatka `doctor` o tym, gdzie faktycznie leżą sekrety; bez wartości.
 pub(crate) fn secrets_storage_note() -> String {
-    let dotenv = crate::lab_dotenv_path();
+    let dotenv = crate::jdg_dotenv_path();
     if keychain_enabled() {
         format!(
-            "Sekrety tekstowe LAB zapisuje w {} (plik 600) i kopiuje do macOS Keychain (usługa lab-cli, LAB_USE_KEYCHAIN=1); wartości z Keychain nie są kopiowane do tego pliku. Kolejność odczytu: zmienna sesji → ten plik → plik 600 → Keychain. Plik ~/.config/lab/env nie przechowuje sekretów.",
+            "Sekrety tekstowe jdg-cli zapisuje w {} (plik 600) i kopiuje do macOS Keychain (usługa jdg-cli, JDG_USE_KEYCHAIN=1); wartości z Keychain nie są kopiowane do tego pliku. Kolejność odczytu: zmienna sesji → ten plik → plik 600 → Keychain. Plik ~/.config/jdg-cli/env nie przechowuje sekretów.",
             dotenv.display()
         )
     } else {
         format!(
-            "Sekrety tekstowe są w {} (plik 600); Keychain jest wyłączony (LAB_USE_KEYCHAIN=1 go włącza). Zmienna sesji ma pierwszeństwo; plik ~/.config/lab/env nie przechowuje sekretów.",
+            "Sekrety tekstowe są w {} (plik 600); Keychain jest wyłączony (JDG_USE_KEYCHAIN=1 go włącza). Zmienna sesji ma pierwszeństwo; plik ~/.config/jdg-cli/env nie przechowuje sekretów.",
             dotenv.display()
         )
     }
@@ -1364,13 +1366,13 @@ pub(crate) fn doctor(db_path: &Path, token_env: &str) -> Result<()> {
     let year = status.year;
     let mail_candidates = default_mail_candidates_path(year);
     let amazon_mail_candidates = default_amazon_mail_candidates_path(year);
-    let lab_root = lab_root_info();
+    let jdg_root = jdg_root_info();
     let ksef_records = configured_ksef_out_path(year);
     let saldeo_records = default_saldeo_records_path(year);
     let ksef_context_type =
-        lab_config_var("KSEF_CONTEXT_TYPE").unwrap_or_else(|| "Nip".to_string());
-    let raw_ksef_context = lab_config_var("KSEF_CONTEXT_NIP")
-        .or_else(|| lab_config_var("KSEF_NIP"))
+        jdg_config_var("KSEF_CONTEXT_TYPE").unwrap_or_else(|| "Nip".to_string());
+    let raw_ksef_context = jdg_config_var("KSEF_CONTEXT_NIP")
+        .or_else(|| jdg_config_var("KSEF_NIP"))
         .unwrap_or_else(|| DEFAULT_PRODUCTMESH_NIP.to_string());
     let ksef_context_value = if ksef_context_type.eq_ignore_ascii_case("Nip") {
         normalize_tax_id(&raw_ksef_context).unwrap_or(raw_ksef_context)
@@ -1395,7 +1397,7 @@ pub(crate) fn doctor(db_path: &Path, token_env: &str) -> Result<()> {
             "token_source": status.gmail_token_source.as_str(),
             "token_file_valid": status.gmail_authed,
             "usable": gmail_usable,
-            "client_secret_path": lab_config_var("GOOGLE_CLIENT_SECRET_PATH")
+            "client_secret_path": jdg_config_var("GOOGLE_CLIENT_SECRET_PATH")
         },
         "saldeo": {
             "storage_state": default_saldeo_storage_state_path().display().to_string(),
@@ -1440,17 +1442,17 @@ pub(crate) fn doctor(db_path: &Path, token_env: &str) -> Result<()> {
         "database": {
             "path": db_path.display().to_string(),
             "exists": status.db_exists,
-            "lab_root": lab_root.path.display().to_string(),
-            "lab_root_source": lab_root.source.as_str()
+            "jdg_root": jdg_root.path.display().to_string(),
+            "jdg_root_source": jdg_root.source.as_str()
         },
         "secrets": secrets_status_json(&status),
         "notes": [
             "GmailFetch wymaga tokenu OAuth z zakresem gmail.readonly.",
             "PDF-y są parsowane przez pdftotext, potem PyMuPDF/pdfplumber/pypdf jako fallback.",
-            "lab reconcile bez własnych --ksef/--saldeo pobiera online metadane KSeF i Saldeo przed porównaniem.",
+            "jdg-cli reconcile bez własnych --ksef/--saldeo pobiera online metadane KSeF i Saldeo przed porównaniem.",
             "KSeF online używa KSEF_TOKEN, KSEF_CONTEXT_NIP/KSEF_NIP i KSEF_BASE_URL/KSEF_ENV; metadane są cache'owane lokalnie w KSEF_DATA_DIR albo data/ksef-<rok>.",
             secrets_storage_note(),
-            "Jeśli OPENROUTER_API_KEY jest ustawiony, LAB odczytuje brakujące PDF-y przez google/gemini-3.8-flash ze structured output. Lokalny Gemma zostaje jako zapas."
+            "Jeśli OPENROUTER_API_KEY jest ustawiony, jdg-cli odczytuje brakujące PDF-y przez google/gemini-3.8-flash ze structured output. Lokalny Gemma zostaje jako zapas."
         ],
         "next_steps": onboard_next_steps(&status, gmail_usable)
     });
@@ -1482,7 +1484,7 @@ mod playwright_version_tests {
             "1.63.0\n",
         ] {
             let err = playwright_version_from(Some(bad)).unwrap_err().to_string();
-            assert!(err.contains("LAB_PLAYWRIGHT_VERSION"), "{bad:?}: {err}");
+            assert!(err.contains("JDG_PLAYWRIGHT_VERSION"), "{bad:?}: {err}");
         }
     }
 
@@ -1491,13 +1493,14 @@ mod playwright_version_tests {
         let script = include_str!("../scripts/saldeo-auth.sh");
         assert!(
             script.contains(&format!(
-                "PLAYWRIGHT_VERSION=\"${{LAB_PLAYWRIGHT_VERSION:-{PLAYWRIGHT_VERSION}}}\""
+                "PLAYWRIGHT_VERSION=\"${{JDG_PLAYWRIGHT_VERSION:-{PLAYWRIGHT_VERSION}}}\""
             )),
             "scripts/saldeo-auth.sh musi przypinać Playwright {PLAYWRIGHT_VERSION}"
         );
         assert!(script.contains("\"playwright@$PLAYWRIGHT_VERSION\""));
         assert!(script.contains("--ignore-scripts"));
-        let command = npm_install_playwright_command(Path::new("/tmp/lab-prefix-dummy"), "next");
+        let command =
+            npm_install_playwright_command(Path::new("/tmp/jdg-cli-prefix-dummy"), "next");
         let args = command
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())

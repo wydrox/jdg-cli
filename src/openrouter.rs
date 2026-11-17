@@ -46,7 +46,7 @@ pub(crate) fn openrouter_configured() -> bool {
 }
 
 pub(crate) fn openrouter_model() -> String {
-    lab_config_var("LAB_OPENROUTER_MODEL").unwrap_or_else(|| DEFAULT_OPENROUTER_MODEL.to_string())
+    jdg_config_var("JDG_OPENROUTER_MODEL").unwrap_or_else(|| DEFAULT_OPENROUTER_MODEL.to_string())
 }
 
 pub(crate) fn strip_openrouter_batch_variant(model: &str) -> String {
@@ -76,7 +76,7 @@ pub(crate) fn openrouter_progress_line(processed: usize, todo: usize, filename: 
 
 fn openrouter_timeout() -> Duration {
     Duration::from_secs(
-        lab_config_var("LAB_OPENROUTER_TIMEOUT_SECS")
+        jdg_config_var("JDG_OPENROUTER_TIMEOUT_SECS")
             .and_then(|value| value.parse().ok())
             .unwrap_or(120)
             .clamp(15, 300),
@@ -84,7 +84,7 @@ fn openrouter_timeout() -> Duration {
 }
 
 fn openrouter_pdf_engine() -> String {
-    lab_config_var("LAB_OPENROUTER_PDF_ENGINE").unwrap_or_else(|| "native".to_string())
+    jdg_config_var("JDG_OPENROUTER_PDF_ENGINE").unwrap_or_else(|| "native".to_string())
 }
 
 fn nullable_string(description: &str) -> Value {
@@ -267,7 +267,7 @@ pub(crate) fn openrouter_extract_invoice_fields(
             .header("Authorization", format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/wydrox/jdg-cli")
-            .header("X-Title", "LAB")
+            .header("X-Title", "jdg-cli")
             .json(&body)
             .send()
         {

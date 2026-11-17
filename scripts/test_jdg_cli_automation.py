@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lab-automation.sh against a stub `lab` binary and a stub `osascript` in a temp HOME."""
+"""jdg-cli-automation.sh against a stub `jdg-cli` binary and a stub `osascript` in a temp HOME."""
 import os
 import stat
 import subprocess
@@ -7,14 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).with_name("lab-automation.sh")
+SCRIPT = Path(__file__).with_name("jdg-cli-automation.sh")
 
-STUB_LAB = r"""#!/usr/bin/env bash
-printf 'LAB_NONINTERACTIVE=%s %s\n' "${LAB_NONINTERACTIVE-unset}" "$*" >> "$STUB_CALLS"
+STUB_JDG = r"""#!/usr/bin/env bash
+printf 'JDG_NONINTERACTIVE=%s %s\n' "${JDG_NONINTERACTIVE-unset}" "$*" >> "$STUB_CALLS"
 case "${STUB_MODE:-ok}" in
   expired)
     if [[ "$1" == sync ]]; then
-      echo "Error: Saldeo session expired (LAB_NONINTERACTIVE=1); run lab onboard" >&2
+      echo "Error: Saldeo session expired (JDG_NONINTERACTIVE=1); run jdg-cli onboard" >&2
       exit 1
     fi
     ;;
@@ -48,7 +48,7 @@ def write_exec(path, text):
     path.chmod(0o755)
 
 
-class LabAutomationTests(unittest.TestCase):
+class JdgAutomationTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         root = Path(self._tmp.name)
@@ -56,18 +56,18 @@ class LabAutomationTests(unittest.TestCase):
         self.home.mkdir()
         self.bin = root / "bin"
         self.bin.mkdir()
-        self.log_dir = self.home / "Library" / "Logs" / "lab"
+        self.log_dir = self.home / "Library" / "Logs" / "jdg-cli"
         self.calls = root / "calls.txt"
         self.notify_log = root / "notify.txt"
-        write_exec(self.bin / "lab", STUB_LAB)
+        write_exec(self.bin / "jdg-cli", STUB_JDG)
         write_exec(self.bin / "osascript", STUB_OSASCRIPT)
         self.env = {
             "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.home),
-            "LAB_ROOT": str(root),
-            "LAB_BIN": str(self.bin / "lab"),
-            "LAB_YEAR": "2026",
-            "LAB_LOCK_DIR": str(root / "lock" / "automation.lock"),
+            "JDG_ROOT": str(root),
+            "JDG_BIN": str(self.bin / "jdg-cli"),
+            "JDG_YEAR": "2026",
+            "JDG_LOCK_DIR": str(root / "lock" / "automation.lock"),
             "STUB_CALLS": str(self.calls),
             "NOTIFY_LOG": str(self.notify_log),
         }
@@ -93,8 +93,8 @@ class LabAutomationTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.log_dir.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((self.log_dir / "automation.log").stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE((self.log_dir / "reconcile-2026.json").stat().st_mode) & 0o077, 0)
-        self.assertTrue(self.notifications()[-1].startswith("LAB automation done|"))
-        self.assertTrue(all(line.startswith("LAB_NONINTERACTIVE=1 ") for line in self.calls.read_text().splitlines()))
+        self.assertTrue(self.notifications()[-1].startswith("jdg-cli automation done|"))
+        self.assertTrue(all(line.startswith("JDG_NONINTERACTIVE=1 ") for line in self.calls.read_text().splitlines()))
 
     def test_existing_world_readable_log_is_tightened(self):
         self.log_dir.mkdir(parents=True)
@@ -112,8 +112,8 @@ class LabAutomationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         notes = self.notifications()
         self.assertEqual(len(notes), 1, notes)
-        self.assertTrue(notes[0].startswith("LAB: Saldeo login needed|"), notes)
-        self.assertIn("lab onboard", notes[0])
+        self.assertTrue(notes[0].startswith("jdg-cli: Saldeo login needed|"), notes)
+        self.assertIn("jdg-cli onboard", notes[0])
         self.assertIn("Saldeo session expired", (self.log_dir / "automation.log").read_text())
 
     def test_other_failure_sends_generic_notification(self):
@@ -121,12 +121,12 @@ class LabAutomationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3, result.stderr)
         notes = self.notifications()
         self.assertEqual(len(notes), 1, notes)
-        self.assertTrue(notes[0].startswith("LAB automation failed|"), notes)
+        self.assertTrue(notes[0].startswith("jdg-cli automation failed|"), notes)
 
     def test_explicit_noninteractive_setting_wins(self):
-        result = self.run_script(LAB_NONINTERACTIVE="0")
+        result = self.run_script(JDG_NONINTERACTIVE="0")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(all(line.startswith("LAB_NONINTERACTIVE=0 ") for line in self.calls.read_text().splitlines()))
+        self.assertTrue(all(line.startswith("JDG_NONINTERACTIVE=0 ") for line in self.calls.read_text().splitlines()))
 
     def rotate(self, size, old_files):
         self.log_dir.mkdir(parents=True)
@@ -139,7 +139,7 @@ set -euo pipefail
 source {SCRIPT}
 rotate_log
 """
-        env = dict(self.env, LAB_LOG_DIR=str(self.log_dir))
+        env = dict(self.env, JDG_LOG_DIR=str(self.log_dir))
         result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         return log

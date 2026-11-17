@@ -15,8 +15,10 @@ struct TempPdf(PathBuf);
 
 impl TempPdf {
     fn new(name: &str) -> Self {
-        let path =
-            std::env::temp_dir().join(format!("lab-tui-year-{name}-{}.pdf", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "jdg-cli-tui-year-{name}-{}.pdf",
+            std::process::id()
+        ));
         std::fs::write(&path, b"%PDF-1.4\n").unwrap();
         Self(path)
     }

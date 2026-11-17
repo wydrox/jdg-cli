@@ -92,7 +92,7 @@ fn resolve_symlink_destination(path: &Path) -> Result<PathBuf> {
 fn create_private_temp(dir: &Path, name: &OsStr) -> Result<(PathBuf, fs::File)> {
     for _ in 0..TEMP_ATTEMPTS {
         let tmp = dir.join(format!(
-            ".{}.lab-tmp-{}",
+            ".{}.jdg-cli-tmp-{}",
             name.to_string_lossy(),
             random_suffix()
         ));
@@ -163,16 +163,16 @@ fn sync_dir(dir: &Path) -> Result<()> {
     }
 }
 
-/// Katalog konfiguracji LAB (`~/.config/lab`); powstaje z prawami 700.
-fn lab_config_dir() -> Option<PathBuf> {
+/// Katalog konfiguracji jdg-cli (`~/.config/jdg-cli`); powstaje z prawami 700.
+fn jdg_config_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
-        .map(|home| PathBuf::from(home).join(".config").join("lab"))
+        .map(|home| PathBuf::from(home).join(".config").join("jdg-cli"))
 }
 
-/// Tworzy brakujący katalog na pliki prywatne; katalog LAB i jego podkatalogi dostają 700.
+/// Tworzy brakujący katalog na pliki prywatne; katalog jdg-cli i jego podkatalogi dostają 700.
 pub(crate) fn create_dir_for_private_files(dir: &Path) -> Result<()> {
-    create_dir_with_private_root(dir, lab_config_dir().as_deref())
+    create_dir_with_private_root(dir, jdg_config_dir().as_deref())
 }
 
 fn create_dir_with_private_root(dir: &Path, private_root: Option<&Path>) -> Result<()> {
@@ -222,8 +222,8 @@ pub(crate) fn chmod_private(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Narzędzia uruchamiane przez LAB z katalogów systemowych; `lab doctor` i
-/// `lab onboard --check` raportują dla nich odrzucone kopie i katalogi zapisywalne dla grupy.
+/// Narzędzia uruchamiane przez jdg-cli z katalogów systemowych; `jdg-cli doctor` i
+/// `jdg-cli onboard --check` raportują dla nich odrzucone kopie i katalogi zapisywalne dla grupy.
 const CHECKED_TOOLS: [&str; 5] = ["pdftotext", "pdfinfo", "pdftoppm", "openssl", "git"];
 
 /// Narzędzie z katalogów systemowych, potem z bezpiecznych katalogów PATH. Kopia,
@@ -392,7 +392,7 @@ fn untrusted_tool_reason(_path: &Path, _uid: u32) -> Option<String> {
     None
 }
 
-/// Ostrzeżenia dla `lab doctor` / `lab onboard --check`: odrzucone kopie narzędzi oraz
+/// Ostrzeżenia dla `jdg-cli doctor` / `jdg-cli onboard --check`: odrzucone kopie narzędzi oraz
 /// katalogi narzędzi w użyciu (PATH procesów potomnych i katalogi znalezionych narzędzi,
 /// także po rozwinięciu dowiązań), które są zapisywalne dla grupy.
 pub(crate) fn tool_dir_warnings() -> Vec<String> {
@@ -434,7 +434,7 @@ fn group_writable_warning(dir: &Path) -> Option<String> {
     let mode = meta.permissions().mode();
     (mode & 0o020 != 0).then(|| {
         format!(
-            "katalog narzędzi {} jest zapisywalny dla grupy {} (prawa {:o}): inni członkowie tej grupy mogą podmienić uruchamiane przez LAB narzędzia",
+            "katalog narzędzi {} jest zapisywalny dla grupy {} (prawa {:o}): inni członkowie tej grupy mogą podmienić uruchamiane przez jdg-cli narzędzia",
             dir.display(),
             group_label(meta.gid()),
             mode & 0o7777
@@ -546,7 +546,7 @@ pub(crate) fn apply_isolated_env(command: &mut Command) -> &mut Command {
     command
 }
 
-/// Zmienne z sekretami LAB i tokenem Gmail; procesy potomne, które ich nie potrzebują
+/// Zmienne z sekretami jdg-cli i tokenem Gmail; procesy potomne, które ich nie potrzebują
 /// (node, npm, skrypt logowania Saldeo), dostają środowisko bez nich.
 pub(crate) const CHILD_SECRET_ENV_KEYS: [&str; 8] = [
     "KSEF_TOKEN",
@@ -559,7 +559,7 @@ pub(crate) const CHILD_SECRET_ENV_KEYS: [&str; 8] = [
     "GMAIL_REFRESH_TOKEN",
 ];
 
-/// Reszta środowiska zostaje (PATH, HOME, proxy npm); znikają tylko sekrety LAB.
+/// Reszta środowiska zostaje (PATH, HOME, proxy npm); znikają tylko sekrety jdg-cli.
 pub(crate) fn remove_secret_env(command: &mut Command) -> &mut Command {
     for key in crate::SECRET_ENV_KEYS
         .iter()
@@ -711,8 +711,10 @@ mod tests {
         fn new(name: &str) -> Self {
             static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
             let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let dir = std::env::temp_dir()
-                .join(format!("lab-hardening-{name}-{}-{id}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "jdg-cli-hardening-{name}-{}-{id}",
+                std::process::id()
+            ));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();
             Self(dir)
@@ -736,7 +738,7 @@ mod tests {
             .unwrap()
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.contains(".lab-tmp-"))
+            .filter(|name| name.contains(".jdg-cli-tmp-"))
             .collect()
     }
 
@@ -785,8 +787,8 @@ mod tests {
         .unwrap();
         let tmp = seen.expect("hook nie został wywołany");
         let tmp_name = tmp.file_name().unwrap().to_string_lossy().into_owned();
-        assert!(tmp_name.starts_with("..env.lab-tmp-"), "{tmp_name}");
-        let suffix = tmp_name.trim_start_matches("..env.lab-tmp-");
+        assert!(tmp_name.starts_with("..env.jdg-cli-tmp-"), "{tmp_name}");
+        let suffix = tmp_name.trim_start_matches("..env.jdg-cli-tmp-");
         assert_ne!(suffix, std::process::id().to_string());
         assert_eq!(suffix.len(), 24, "{suffix}");
         assert_eq!(tmp.parent(), Some(dir.0.as_path()));
@@ -890,17 +892,17 @@ mod tests {
         let dir = TempDir::new("planted");
         let victim = dir.0.join("victim");
         fs::write(&victim, "untouched").unwrap();
-        // Dawna, przewidywalna nazwa: `.secret.json.lab-tmp-<pid>`.
+        // Dawna, przewidywalna nazwa: `.secret.json.jdg-cli-tmp-<pid>`.
         let old_name = dir
             .0
-            .join(format!(".secret.json.lab-tmp-{}", std::process::id()));
+            .join(format!(".secret.json.jdg-cli-tmp-{}", std::process::id()));
         std::os::unix::fs::symlink(&victim, &old_name).unwrap();
         // Nawet gdy atakujący trafi w nazwę, `create_new` + `O_NOFOLLOW` odmawia.
-        let guessed = dir.0.join(".secret.json.lab-tmp-guessed");
+        let guessed = dir.0.join(".secret.json.jdg-cli-tmp-guessed");
         std::os::unix::fs::symlink(&victim, &guessed).unwrap();
         let err = open_private_new(&guessed).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
-        let dangling = dir.0.join(".secret.json.lab-tmp-dangling");
+        let dangling = dir.0.join(".secret.json.jdg-cli-tmp-dangling");
         let dangling_target = dir.0.join("would-be-created");
         std::os::unix::fs::symlink(&dangling_target, &dangling).unwrap();
         assert!(open_private_new(&dangling).is_err());
@@ -921,17 +923,17 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn lab_config_dir_is_created_private() {
+    fn jdg_config_dir_is_created_private() {
         let dir = TempDir::new("mkdir");
-        let lab = dir.0.join("home/.config/lab");
-        let nested = lab.join("playwright");
-        create_dir_with_private_root(&nested, Some(&lab)).unwrap();
-        assert_eq!(mode(&lab), 0o700);
+        let jdg = dir.0.join("home/.config/jdg-cli");
+        let nested = jdg.join("playwright");
+        create_dir_with_private_root(&nested, Some(&jdg)).unwrap();
+        assert_eq!(mode(&jdg), 0o700);
         assert_eq!(mode(&nested), 0o700);
-        // Katalogi poza katalogiem LAB zostają z domyślnymi prawami.
+        // Katalogi poza katalogiem jdg-cli zostają z domyślnymi prawami.
         assert_ne!(mode(&dir.0.join("home/.config")), 0o700);
         let other = dir.0.join("out/reports");
-        create_dir_with_private_root(&other, Some(&lab)).unwrap();
+        create_dir_with_private_root(&other, Some(&jdg)).unwrap();
         assert!(other.is_dir());
     }
 
@@ -942,7 +944,7 @@ mod tests {
         let dir = TempDir::new("which");
         let bin = dir.0.join("bin");
         fs::create_dir_all(&bin).unwrap();
-        let name = format!("lab-test-tool-{}", std::process::id());
+        let name = format!("jdg-cli-test-tool-{}", std::process::id());
         let tool = bin.join(&name);
         fs::write(&tool, "#!/bin/sh\n").unwrap();
         fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
@@ -977,7 +979,7 @@ mod tests {
     fn unique_tool_name() -> String {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         format!(
-            "lab-test-trusted-tool-{}-{}",
+            "jdg-cli-test-trusted-tool-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         )
@@ -1157,6 +1159,6 @@ mod tests {
 
     #[test]
     fn relative_python_path_is_rejected() {
-        assert!(require_existing_file(Path::new("python3"), "LAB_OCR_PYTHON").is_err());
+        assert!(require_existing_file(Path::new("python3"), "JDG_OCR_PYTHON").is_err());
     }
 }

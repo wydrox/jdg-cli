@@ -1,7 +1,7 @@
 use super::*;
 
 /// Temporary database. The sentinel row keeps the table non-empty, so the legacy
-/// `~/.config/lab/saldeo-overrides.json` import never runs against the real HOME.
+/// `~/.config/jdg-cli/saldeo-overrides.json` import never runs against the real HOME.
 struct TempDb {
     root: PathBuf,
     path: PathBuf,
@@ -17,8 +17,8 @@ impl TempDb {
                 .unwrap()
                 .as_nanos()
         );
-        let root = std::env::temp_dir().join(format!("lab-saldeo-override-{tag}-{nonce}"));
-        let path = root.join("lab.sqlite");
+        let root = std::env::temp_dir().join(format!("jdg-cli-saldeo-override-{tag}-{nonce}"));
+        let path = root.join("jdg-cli.sqlite");
         let conn = open_db(&path).unwrap();
         conn.execute(
             "INSERT INTO saldeo_overrides (content_hash, created_at, updated_at) VALUES ('saldeo:sentinel', 'x', 'x')",

@@ -2,12 +2,12 @@ use super::*;
 use std::cell::Cell;
 
 fn inputs(
-    lab_theme: Option<&str>,
+    jdg_theme: Option<&str>,
     colorfgbg: Option<&str>,
     term_program: Option<&str>,
 ) -> ThemeInputs {
     ThemeInputs {
-        lab_theme: lab_theme.map(String::from),
+        jdg_theme: jdg_theme.map(String::from),
         colorfgbg: colorfgbg.map(String::from),
         term_program: term_program.map(String::from),
         ..ThemeInputs::default()
@@ -25,7 +25,7 @@ fn decide(inputs: &ThemeInputs, system_dark: Option<bool>) -> (bool, usize) {
 }
 
 #[test]
-fn lab_theme_override_wins_over_everything() {
+fn jdg_theme_override_wins_over_everything() {
     for term in [None, Some("Apple_Terminal")] {
         assert_eq!(
             decide(&inputs(Some("light"), Some("15;0"), term), Some(true)),
@@ -37,13 +37,13 @@ fn lab_theme_override_wins_over_everything() {
         );
     }
     let mut both = inputs(Some("dark"), None, None);
-    both.lab_tui_theme = Some("light".into());
+    both.jdg_tui_theme = Some("light".into());
     both.term_background = Some("light".into());
     assert_eq!(decide(&both, None), (false, 0));
 }
 
 #[test]
-fn invalid_lab_theme_falls_back_to_normal_detection() {
+fn invalid_jdg_theme_falls_back_to_normal_detection() {
     for value in ["", "jasny", "auto", "lightish"] {
         assert_eq!(
             decide(&inputs(Some(value), Some("0;15"), None), None),
@@ -61,9 +61,9 @@ fn invalid_lab_theme_falls_back_to_normal_detection() {
 #[test]
 fn existing_overrides_and_colorfgbg_are_unchanged() {
     let mut tui = inputs(None, Some("0;15"), Some("Apple_Terminal"));
-    tui.lab_tui_theme = Some("jasny".into());
+    tui.jdg_tui_theme = Some("jasny".into());
     assert_eq!(decide(&tui, Some(true)), (true, 0));
-    tui.lab_tui_theme = Some("dark".into());
+    tui.jdg_tui_theme = Some("dark".into());
     assert_eq!(decide(&tui, Some(false)), (false, 0));
     let mut bg = inputs(None, Some("0;15"), None);
     bg.term_background = Some("Light".into());

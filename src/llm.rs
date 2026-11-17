@@ -31,6 +31,7 @@ const LLM_ATTEMPTS_FILE: &str = "llm_attempts.jsonl";
 
 // Part of the attempt key: bump when the prompt, response schema or validation
 // rules change, so earlier answers no longer block a new attempt.
+// Identyfikator formatu zapisany w danych (cache, rejestr wysyłek) — nie zmieniać.
 const LLM_EXTRACTION_VERSION: &str = "lab-invoice-llm:v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -170,7 +171,7 @@ fn llm_queue(
         if !record_queued_for_llm(record, skip_hashes, paid, request == LlmRequest::Forced) {
             continue;
         }
-        let Some(path) = record.source_path.as_deref().map(resolve_lab_source_path) else {
+        let Some(path) = record.source_path.as_deref().map(resolve_jdg_source_path) else {
             continue;
         };
         if request == LlmRequest::Automatic
@@ -341,7 +342,7 @@ where
         let Some(source_path) = records[idx].source_path.clone() else {
             continue;
         };
-        let path = &resolve_lab_source_path(&source_path);
+        let path = &resolve_jdg_source_path(&source_path);
         let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("PDF");
         let status = if use_openrouter {
             openrouter_progress_line(processed + 1, todo, fname)
@@ -398,17 +399,17 @@ where
 
 fn ppmlx_base_url() -> Result<String> {
     local_llm_base_url(
-        &lab_config_var("PPMLX_BASE_URL").unwrap_or_else(|| "http://127.0.0.1:6767".to_string()),
+        &jdg_config_var("PPMLX_BASE_URL").unwrap_or_else(|| "http://127.0.0.1:6767".to_string()),
     )
 }
 
 fn llm_model() -> String {
-    lab_config_var("LAB_LLM_MODEL").unwrap_or_else(|| "gemma-4-e4b-it-optiq".to_string())
+    jdg_config_var("JDG_LLM_MODEL").unwrap_or_else(|| "gemma-4-e4b-it-optiq".to_string())
 }
 
 fn llm_timeout() -> Duration {
     Duration::from_secs(
-        lab_config_var("LAB_LLM_TIMEOUT_SECS")
+        jdg_config_var("JDG_LLM_TIMEOUT_SECS")
             .and_then(|value| value.parse().ok())
             .unwrap_or(45),
     )

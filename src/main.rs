@@ -44,10 +44,10 @@ pub(crate) use credentials::*;
 #[cfg(test)]
 mod credentials_tests;
 mod invoice_validation;
-mod lab_root;
+mod jdg_root;
 mod own_nip;
 use invoice_validation::counterparty_name_is_placeholder;
-pub(crate) use lab_root::*;
+pub(crate) use jdg_root::*;
 mod openrouter;
 pub(crate) use openrouter::*;
 #[cfg(test)]
@@ -89,15 +89,14 @@ pub(crate) use parser::*;
 pub(crate) use scoring::*;
 pub(crate) use sync::*;
 
-/// Celowo dawna nazwa pakietu: zmiana osierociłaby sekrety już zapisane w Keychain.
-pub(crate) const KEYCHAIN_SERVICE: &str = "lab-cli";
+pub(crate) const KEYCHAIN_SERVICE: &str = "jdg-cli";
 const DEFAULT_PRODUCTMESH_NIP: &str = "5242920020";
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     prepare_secret_store();
-    // Katalog LAB wybierany raz, przed TUI: komunikat i zapamiętanie LAB_ROOT idą na stderr.
-    let _ = lab_root_info();
+    // Katalog jdg-cli wybierany raz, przed TUI: komunikat i zapamiętanie JDG_ROOT idą na stderr.
+    let _ = jdg_root_info();
     let db_path = cli.db.unwrap_or_else(default_db_path);
     match cli.command {
         Some(command) => handle_command(&db_path, command),

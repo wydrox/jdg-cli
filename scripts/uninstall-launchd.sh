@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LABEL="${LAB_LAUNCHD_LABEL:-com.rafalw.lab.automation}"
+LABEL="${JDG_LAUNCHD_LABEL:-com.rafalw.jdg-cli.automation}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true

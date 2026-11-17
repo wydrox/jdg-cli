@@ -68,7 +68,7 @@ impl TempDir {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "lab-llm-ledger-{}-{}-{}",
+            "jdg-cli-llm-ledger-{}-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap(),
             NEXT.fetch_add(1, Ordering::Relaxed)

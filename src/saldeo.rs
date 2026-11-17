@@ -107,7 +107,7 @@ pub(crate) fn saldeo_sync_item_from_record(
     let source_path = record.source_path.clone();
     let can_upload = source_path
         .as_deref()
-        .map(|path| resolve_lab_source_path(path).is_file())
+        .map(|path| resolve_jdg_source_path(path).is_file())
         .unwrap_or(false);
     SaldeoSyncItem {
         own_nip_check: own_nip::record_check(record),
@@ -317,7 +317,7 @@ fn saldeo_mark_ledger_hit(item: &mut SaldeoSyncItem, entry: &SaldeoUploadLedgerE
     if entry.state == SALDEO_LEDGER_UNCONFIRMED {
         item.upload_status = "unconfirmed".to_string();
         item.skip_reason = Some(format!(
-            "plik wysłany {when} do okresu {period} bez potwierdzenia Saldeo; sprawdź ręcznie — LAB nie ponawia takiego uploadu"
+            "plik wysłany {when} do okresu {period} bez potwierdzenia Saldeo; sprawdź ręcznie — jdg-cli nie ponawia takiego uploadu"
         ));
     } else {
         item.upload_status = "already_uploaded".to_string();
@@ -339,7 +339,7 @@ fn saldeo_apply_plan_guards(
     let Some(source_path) = item.source_path.clone() else {
         return Ok(());
     };
-    let bytes = match fs::read(resolve_lab_source_path(&source_path)) {
+    let bytes = match fs::read(resolve_jdg_source_path(&source_path)) {
         Ok(bytes) => bytes,
         Err(err) => {
             item.can_upload = false;
@@ -357,7 +357,7 @@ fn saldeo_apply_plan_guards(
         return Ok(());
     }
     // Check the actual local document, not inferred fields or its filename.
-    item.own_nip_check = parse_file(SourceKind::Mail, &resolve_lab_source_path(&source_path))
+    item.own_nip_check = parse_file(SourceKind::Mail, &resolve_jdg_source_path(&source_path))
         .map(|record| own_nip::record_check(&record))
         .unwrap_or(own_nip::OwnNipCheck::Unreadable);
     saldeo_apply_period_rule(item, plan_year, today);
@@ -373,17 +373,17 @@ pub(crate) fn saldeo_empty_saldeo_guard(
 ) -> Result<()> {
     if saldeo_record_count == Some(0) && uploadable_count > 0 && !allow_empty {
         return Err(anyhow!(
-            "brak rekordów Saldeo dla roku przy {uploadable_count} plikach do wysłania — LAB nie odróżni pustego Saldeo od nieudanego odczytu; odśwież Saldeo albo ustaw LAB_ALLOW_EMPTY_SALDEO=1"
+            "brak rekordów Saldeo dla roku przy {uploadable_count} plikach do wysłania — jdg-cli nie odróżni pustego Saldeo od nieudanego odczytu; odśwież Saldeo albo ustaw JDG_ALLOW_EMPTY_SALDEO=1"
         ));
     }
     Ok(())
 }
 
 pub(crate) fn saldeo_allow_empty_from_env() -> bool {
-    std::env::var("LAB_ALLOW_EMPTY_SALDEO").as_deref() == Ok("1")
+    std::env::var("JDG_ALLOW_EMPTY_SALDEO").as_deref() == Ok("1")
 }
 
-/// Wyłączny lock zapisu do Saldeo (flock na pliku w ~/.config/lab). Zwalniany przy drop.
+/// Wyłączny lock zapisu do Saldeo (flock na pliku w ~/.config/jdg-cli). Zwalniany przy drop.
 pub(crate) struct SaldeoWriteLock {
     file: fs::File,
 }
@@ -401,7 +401,9 @@ pub(crate) fn default_saldeo_write_lock_path() -> PathBuf {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    home.join(".config").join("lab").join("saldeo-write.lock")
+    home.join(".config")
+        .join("jdg-cli")
+        .join("saldeo-write.lock")
 }
 
 pub(crate) fn saldeo_write_lock() -> Result<SaldeoWriteLock> {
@@ -433,7 +435,7 @@ pub(crate) fn saldeo_write_lock_at(path: &Path) -> Result<SaldeoWriteLock> {
                 .map(|pid| format!(" (PID {pid})"))
                 .unwrap_or_default();
             return Err(anyhow!(
-                "inny proces LAB{holder} zapisuje teraz do Saldeo (TUI, CLI, MCP albo zadanie launchd); lock {} jest zajęty — spróbuj po jego zakończeniu",
+                "inny proces jdg-cli{holder} zapisuje teraz do Saldeo (TUI, CLI, MCP albo zadanie launchd); lock {} jest zajęty — spróbuj po jego zakończeniu",
                 path.display()
             ));
         }
@@ -463,7 +465,7 @@ pub(crate) fn saldeo_upload_plan_with_progress(
     let _lock = saldeo_write_lock()?;
     let db_path = plan.ledger_db_path.clone().ok_or_else(|| {
         anyhow!(
-            "upload Saldeo wymaga bazy LAB z rejestrem wysłanych plików; plan nie wskazuje bazy"
+            "upload Saldeo wymaga bazy jdg-cli z rejestrem wysłanych plików; plan nie wskazuje bazy"
         )
     })?;
     let uploadable_count = plan.items.iter().filter(|item| item.can_upload).count();
@@ -550,7 +552,7 @@ pub(crate) fn saldeo_upload_items_with(
                 format!("Upload Saldeo {upload_index}/{uploadable_count}: {label}"),
             );
         }
-        let bytes = match fs::read(resolve_lab_source_path(&source_path)) {
+        let bytes = match fs::read(resolve_jdg_source_path(&source_path)) {
             Ok(bytes) => bytes,
             Err(err) => {
                 item.upload_status = "failed".to_string();
@@ -1332,18 +1334,19 @@ pub(crate) fn default_saldeo_storage_state_path() -> PathBuf {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    let lab_path = home
+    let jdg_path = home
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("saldeo-storage-state.json");
-    if lab_path.exists() {
-        return lab_path;
+    if jdg_path.exists() {
+        return jdg_path;
     }
     home.join(".config")
         .join("ksef-mail-reconcile")
         .join("saldeo-storage-state.json")
 }
 
+// Znacznik zapisany w rekordach — format danych, nie nazwa programu; nie zmieniać.
 pub(crate) const SALDEO_OVERRIDE_WARNING_PREFIX: &str = "lab override applied";
 
 /// Local correction of a Saldeo record.
@@ -1498,7 +1501,7 @@ pub(crate) fn default_saldeo_record_overrides_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
     home.join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("saldeo-overrides.json")
 }
 
@@ -2300,7 +2303,7 @@ pub(crate) fn saldeo_fetch_with_progress(
         })
         .map_err(|err| match err.kind {
             SaldeoReadFailure::Status(code @ (401 | 403)) => anyhow!(
-                "Sesja Saldeo wygasła (HTTP {code}; Saldeo session expired). Zaloguj się ponownie: lab onboard\n  storage state: {}",
+                "Sesja Saldeo wygasła (HTTP {code}; Saldeo session expired). Zaloguj się ponownie: jdg-cli onboard\n  storage state: {}",
                 default_saldeo_storage_state_path().display()
             ),
             _ => err

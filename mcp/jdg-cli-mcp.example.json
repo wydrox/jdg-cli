@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "jdg-cli-mcp": {
+      "command": "jdg-cli",
+      "args": [
+        "--db",
+        "/path/to/jdg-cli.sqlite",
+        "mcp"
+      ],
+      "cwd": "/path/to/jdg-cli"
+    }
+  }
+}

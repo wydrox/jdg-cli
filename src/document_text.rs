@@ -12,7 +12,7 @@ fn ocr_mode(value: &str) -> Result<OcrMode> {
         "off" => Ok(OcrMode::Off),
         "auto" => Ok(OcrMode::Auto),
         "always" => Ok(OcrMode::Always),
-        _ => Err(anyhow!("LAB_OCR_MODE: dozwolone auto, off, always")),
+        _ => Err(anyhow!("JDG_OCR_MODE: dozwolone auto, off, always")),
     }
 }
 
@@ -78,7 +78,7 @@ pub(crate) fn extract_document_text(path: &Path) -> Result<(String, Vec<String>)
     {
         return Err(anyhow!(PDF_PASSWORD_WARNING));
     }
-    let mode = ocr_mode(&lab_config_var("LAB_OCR_MODE").unwrap_or_else(|| "auto".into()))?;
+    let mode = ocr_mode(&jdg_config_var("JDG_OCR_MODE").unwrap_or_else(|| "auto".into()))?;
     select_text(mode, text, || run_ocr(path))
 }
 
@@ -91,24 +91,24 @@ fn run_ocr(path: &Path) -> Result<String> {
     }
     let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
     let installed = home.join(".local/share/uv/tools/ppmlx/bin/python");
-    let python = if let Some(value) = lab_config_var("LAB_OCR_PYTHON") {
-        require_existing_file(&PathBuf::from(value), "LAB_OCR_PYTHON")?
+    let python = if let Some(value) = jdg_config_var("JDG_OCR_PYTHON") {
+        require_existing_file(&PathBuf::from(value), "JDG_OCR_PYTHON")?
     } else if installed.is_file() {
         installed
     } else {
         local_tool("python3")?
     };
-    let model = lab_config_var("LAB_OCR_MODEL_PATH")
+    let model = jdg_config_var("JDG_OCR_MODEL_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".ppmlx/models/mlx-community--GLM-OCR-4bit"));
     if !model.is_dir() {
         return Err(anyhow!(
-            "brak lokalnego modelu OCR; ustaw LAB_OCR_MODEL_PATH lub pobierz mlx-community/GLM-OCR-4bit"
+            "brak lokalnego modelu OCR; ustaw JDG_OCR_MODEL_PATH lub pobierz mlx-community/GLM-OCR-4bit"
         ));
     }
-    let cache = lab_config_var("LAB_OCR_CACHE_DIR")
+    let cache = jdg_config_var("JDG_OCR_CACHE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".cache/lab/ocr"));
+        .unwrap_or_else(|| home.join(".cache/jdg-cli/ocr"));
     fs::create_dir_all(&cache).with_context(|| format!("mkdir {}", cache.display()))?;
     #[cfg(unix)]
     {
@@ -116,16 +116,16 @@ fn run_ocr(path: &Path) -> Result<String> {
         fs::set_permissions(&cache, fs::Permissions::from_mode(0o700))
             .with_context(|| format!("chmod 700 {}", cache.display()))?;
     }
-    let seconds = lab_config_var("LAB_OCR_TIMEOUT_SECS")
+    let seconds = jdg_config_var("JDG_OCR_TIMEOUT_SECS")
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(180)
         .clamp(1, 1800);
-    let max_pages = lab_config_var("LAB_OCR_MAX_PAGES")
+    let max_pages = jdg_config_var("JDG_OCR_MAX_PAGES")
         .unwrap_or_else(|| "10".into())
         .parse::<u32>()
         .ok()
         .filter(|pages| (1..=100).contains(pages))
-        .ok_or_else(|| anyhow!("LAB_OCR_MAX_PAGES: dozwolone 1-100"))?;
+        .ok_or_else(|| anyhow!("JDG_OCR_MAX_PAGES: dozwolone 1-100"))?;
     // `python -c` puts the working directory first on sys.path, so the helper runs
     // inside the private 0700 cache directory and gets absolute paths only.
     let cache = fs::canonicalize(&cache).with_context(|| format!("ścieżka {}", cache.display()))?;
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn ocr_helper_runs_in_private_cache_dir_with_absolute_paths() {
         let mut command = Command::new("python3");
-        let cache = Path::new("/private/cache/lab/ocr");
+        let cache = Path::new("/private/cache/jdg-cli/ocr");
         ocr_command_args(
             &mut command,
             Path::new("/data/invoice.pdf"),

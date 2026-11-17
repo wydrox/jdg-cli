@@ -10,7 +10,7 @@ pub(crate) struct ApprovePolicy {
 }
 
 impl ApprovePolicy {
-    /// Polityka z flag CLI / argumentów MCP; `LAB_APPROVE_REQUIRE_MAIL` może tylko włączyć filtr.
+    /// Polityka z flag CLI / argumentów MCP; `JDG_APPROVE_REQUIRE_MAIL` może tylko włączyć filtr.
     pub(crate) fn from_args(max_approve: usize, require_mail: bool) -> Self {
         Self {
             max_approve,
@@ -181,7 +181,7 @@ pub(crate) fn handle_upload_command(
         .unwrap_or(Ok(()));
     if let Some(err) = outcome.error {
         for write_err in [json_result.err(), csv_result.err()].into_iter().flatten() {
-            eprintln!("  [LAB] zapis wyniku uploadu nie powiódł się: {write_err:#}");
+            eprintln!("  [jdg-cli] zapis wyniku uploadu nie powiódł się: {write_err:#}");
         }
         return Err(err);
     }
@@ -367,7 +367,7 @@ pub(crate) fn handle_approve_command(
     let written = write_json(&plan, output.as_deref());
     if let Some(message) = plan.blocking_error() {
         if let Err(write_err) = written {
-            eprintln!("  [LAB] zapis wyniku zatwierdzania nie powiódł się: {write_err:#}");
+            eprintln!("  [jdg-cli] zapis wyniku zatwierdzania nie powiódł się: {write_err:#}");
         }
         return Err(anyhow!(message));
     }
@@ -436,7 +436,10 @@ pub(crate) fn saldeo_repair_plan(
     };
     let mail_path = default_mail_candidates_path(year);
     if llm && !mail_path.exists() {
-        eprintln!("  [LAB] brak pliku Gmail do LLM: {}", mail_path.display());
+        eprintln!(
+            "  [jdg-cli] brak pliku Gmail do LLM: {}",
+            mail_path.display()
+        );
     }
     let main_mail = load_mail(mail_path)?;
     let amazon_mail = load_mail(default_amazon_mail_candidates_path(year))?;
@@ -462,7 +465,7 @@ pub(crate) fn saldeo_repair_plan(
             .map(|item| item.override_row.clone())
             .collect::<Vec<_>>();
         save_saldeo_record_overrides(db_path, &override_rows)?;
-        eprintln!("  [LAB] zapisano {} poprawek Saldeo", items.len());
+        eprintln!("  [jdg-cli] zapisano {} poprawek Saldeo", items.len());
     }
     Ok(SaldeoRepairPlan {
         generated_at: Utc::now(),
@@ -569,7 +572,7 @@ pub(crate) fn approve_ksef_rows_with(
     let cap_exceeded = policy.max_approve > 0 && document_ids.len() > policy.max_approve;
     let blocked_reason = cap_exceeded.then(|| {
         format!(
-            "{} dokumentów KSeF do zatwierdzenia przekracza limit {} (--max-approve / max_approve) — nic nie zatwierdzono. Przejrzyj listę document_ids (np. `lab approve` bez --confirm) i uruchom ponownie z wyższym limitem (0 = bez limitu).",
+            "{} dokumentów KSeF do zatwierdzenia przekracza limit {} (--max-approve / max_approve) — nic nie zatwierdzono. Przejrzyj listę document_ids (np. `jdg-cli approve` bez --confirm) i uruchom ponownie z wyższym limitem (0 = bez limitu).",
             document_ids.len(),
             policy.max_approve
         )

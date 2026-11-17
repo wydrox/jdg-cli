@@ -2,29 +2,25 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LABEL="${LAB_LAUNCHD_LABEL:-com.rafalw.lab.automation}"
+LABEL="${JDG_LAUNCHD_LABEL:-com.rafalw.jdg-cli.automation}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-# LAB_BIN and LAB_YEAR go into the plist only when set explicitly; otherwise
-# lab-automation.sh resolves the binary and the year(s) on every run.
-LAB_BIN_OVERRIDE="${LAB_BIN:-}"
-YEAR_OVERRIDE="${LAB_YEAR:-}"
-INTERVAL_SECONDS="${LAB_INTERVAL_SECONDS:-14400}" # every 4h by default
-LOG_DIR="${LAB_LOG_DIR:-$HOME/Library/Logs/lab}"
-SCRIPT="$ROOT/scripts/lab-automation.sh"
+# JDG_BIN and JDG_YEAR go into the plist only when set explicitly; otherwise
+# jdg-cli-automation.sh resolves the binary and the year(s) on every run.
+JDG_BIN_OVERRIDE="${JDG_BIN:-}"
+YEAR_OVERRIDE="${JDG_YEAR:-}"
+INTERVAL_SECONDS="${JDG_INTERVAL_SECONDS:-14400}" # every 4h by default
+LOG_DIR="${JDG_LOG_DIR:-$HOME/Library/Logs/jdg-cli}"
+SCRIPT="$ROOT/scripts/jdg-cli-automation.sh"
 # launchd starts agents with PATH=/usr/bin:/bin:/usr/sbin:/sbin; the binary
 # needs node/npm for the Saldeo re-login and Homebrew tools (poppler).
 BASE_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-# Explicit LAB_BIN wins; else ~/.local/bin/lab, else ~/.local/bin/jdg-cli, else the legacy ~/.local/bin/lab-cli.
-resolve_lab_bin() {
-  if [[ -n "${LAB_BIN_OVERRIDE:-}" ]]; then
-    printf '%s\n' "$LAB_BIN_OVERRIDE"
-  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/jdg-cli" ]]; then
-    printf '%s\n' "$HOME/.local/bin/jdg-cli"
-  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/lab-cli" ]]; then
-    printf '%s\n' "$HOME/.local/bin/lab-cli"
+# Explicit JDG_BIN wins; else ~/.local/bin/jdg-cli.
+resolve_jdg_bin() {
+  if [[ -n "${JDG_BIN_OVERRIDE:-}" ]]; then
+    printf '%s\n' "$JDG_BIN_OVERRIDE"
   else
-    printf '%s\n' "$HOME/.local/bin/lab"
+    printf '%s\n' "$HOME/.local/bin/jdg-cli"
   fi
 }
 
@@ -68,19 +64,19 @@ env_entry() {
 
 render_env() {
   env_entry PATH "$1"
-  env_entry LAB_ROOT "$ROOT"
-  if [[ -n "$LAB_BIN_OVERRIDE" ]]; then
-    env_entry LAB_BIN "$LAB_BIN_OVERRIDE"
+  env_entry JDG_ROOT "$ROOT"
+  if [[ -n "$JDG_BIN_OVERRIDE" ]]; then
+    env_entry JDG_BIN "$JDG_BIN_OVERRIDE"
   fi
   if [[ -n "$YEAR_OVERRIDE" ]]; then
-    env_entry LAB_YEAR "$YEAR_OVERRIDE"
+    env_entry JDG_YEAR "$YEAR_OVERRIDE"
   fi
-  env_entry LAB_LOG_DIR "$LOG_DIR"
+  env_entry JDG_LOG_DIR "$LOG_DIR"
 }
 
 # Log directory 700 and log files 600: they hold invoice data. launchd creates its
 # stdout/stderr files with its own default mode, so they are created here first.
-# lab-automation.sh writes only to automation.log; launchd.out.log stays empty in a
+# jdg-cli-automation.sh writes only to automation.log; launchd.out.log stays empty in a
 # normal run and launchd.err.log keeps whatever the script did not catch (bash errors).
 prepare_log_dir() {
   local file
@@ -132,23 +128,23 @@ PLIST
 }
 
 main() {
-  local lab_bin launchd_path
-  lab_bin="$(resolve_lab_bin)"
+  local jdg_bin launchd_path
+  jdg_bin="$(resolve_jdg_bin)"
 
   if [[ ! -x "$SCRIPT" ]]; then
     echo "ERROR: automation script is not executable: $SCRIPT" >&2
     exit 1
   fi
-  if [[ ! -x "$lab_bin" ]]; then
-    echo "ERROR: LAB binary is not executable: $lab_bin" >&2
+  if [[ ! -x "$jdg_bin" ]]; then
+    echo "ERROR: jdg-cli binary is not executable: $jdg_bin" >&2
     exit 1
   fi
   if [[ -n "$YEAR_OVERRIDE" && ! "$YEAR_OVERRIDE" =~ ^[0-9]{4}$ ]]; then
-    echo "ERROR: LAB_YEAR must be a 4-digit year, got: $YEAR_OVERRIDE" >&2
+    echo "ERROR: JDG_YEAR must be a 4-digit year, got: $YEAR_OVERRIDE" >&2
     exit 1
   fi
   if [[ ! "$INTERVAL_SECONDS" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: LAB_INTERVAL_SECONDS must be a number of seconds, got: $INTERVAL_SECONDS" >&2
+    echo "ERROR: JDG_INTERVAL_SECONDS must be a number of seconds, got: $INTERVAL_SECONDS" >&2
     exit 1
   fi
   if ! command -v node >/dev/null 2>&1; then
@@ -173,9 +169,9 @@ main() {
 
   echo "Installed and started: $LABEL"
   echo "Plist: $PLIST"
-  echo "Binary: $lab_bin${LAB_BIN_OVERRIDE:+ (fixed by LAB_BIN)}"
+  echo "Binary: $jdg_bin${JDG_BIN_OVERRIDE:+ (fixed by JDG_BIN)}"
   if [[ -n "$YEAR_OVERRIDE" ]]; then
-    echo "Year: $YEAR_OVERRIDE (fixed by LAB_YEAR)"
+    echo "Year: $YEAR_OVERRIDE (fixed by JDG_YEAR)"
   else
     echo "Year: current year at run time (Jan-Feb: previous year, then current)"
   fi

@@ -45,7 +45,7 @@ pub(crate) fn default_gmail_token_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("gmail_token.json")
 }
 
@@ -119,7 +119,7 @@ pub(crate) fn gmail_auth(
     })
 }
 
-// The browser needs none of LAB's secrets in its environment.
+// The browser needs none of jdg-cli's secrets in its environment.
 fn oauth_browser_command(auth_url: &str) -> Command {
     let mut command = Command::new("open");
     command.arg(auth_url);
@@ -205,7 +205,7 @@ fn wait_for_oauth_code(
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
                 if std::time::Instant::now() >= deadline {
                     return Err(anyhow!(
-                        "OAuth: brak odpowiedzi z przeglądarki w ciągu {} min; uruchom ponownie `lab onboard` (krok Gmail)",
+                        "OAuth: brak odpowiedzi z przeglądarki w ciągu {} min; uruchom ponownie `jdg-cli onboard` (krok Gmail)",
                         timeout.as_secs().div_ceil(60)
                     ));
                 }
@@ -312,7 +312,7 @@ pub(crate) fn read_gmail_token(path: &Path) -> Result<GmailTokenFile> {
     if uses_default_gmail_token_path(path) {
         let text = secret_value(Secret::GmailToken)?.ok_or_else(|| {
             anyhow!(
-                "brak tokenu Gmail w Keychain i w {}; uruchom lab onboard",
+                "brak tokenu Gmail w Keychain i w {}; uruchom jdg-cli onboard",
                 path.display()
             )
         })?;
@@ -368,7 +368,7 @@ impl GmailAccessToken {
     pub(crate) fn refresh(&self) -> Result<String> {
         let refresher = self.refresher.as_ref().ok_or_else(|| {
             anyhow!(
-                "Gmail odrzucił token dostępu (HTTP 401), a tokenu podanego w zmiennej środowiskowej nie da się odświeżyć; uruchom ponownie `lab onboard` (krok Gmail)"
+                "Gmail odrzucił token dostępu (HTTP 401), a tokenu podanego w zmiennej środowiskowej nie da się odświeżyć; uruchom ponownie `jdg-cli onboard` (krok Gmail)"
             )
         })?;
         let next = refresher(&self.token.borrow())?;
@@ -401,20 +401,20 @@ pub(crate) fn gmail_access_token(
 
     let token = read_gmail_token(token_file).with_context(|| {
         format!(
-            "brak {token_env} i tokenu Gmail ({}); uruchom `lab onboard` (krok Gmail)",
+            "brak {token_env} i tokenu Gmail ({}); uruchom `jdg-cli onboard` (krok Gmail)",
             token_file.display()
         )
     })?;
     let needs_refresh = gmail_token_needs_refresh(&token, Utc::now());
     let client_secret_path = client_secret_path
         .map(PathBuf::from)
-        .or_else(|| lab_config_var("GOOGLE_CLIENT_SECRET_PATH").map(PathBuf::from));
+        .or_else(|| jdg_config_var("GOOGLE_CLIENT_SECRET_PATH").map(PathBuf::from));
     let token_file = token_file.to_path_buf();
     let access = GmailAccessToken {
         token: std::cell::RefCell::new(token),
         refresher: Some(Box::new(move |previous| {
             let client_secret_path = client_secret_path.as_deref().ok_or_else(|| {
-                anyhow!("token Gmail wygasł; podaj --gmail-client-secret albo ustaw GOOGLE_CLIENT_SECRET_PATH w lab onboard, żeby go odświeżyć")
+                anyhow!("token Gmail wygasł; podaj --gmail-client-secret albo ustaw GOOGLE_CLIENT_SECRET_PATH w jdg-cli onboard, żeby go odświeżyć")
             })?;
             refresh_gmail_token(client_secret_path, &token_file, previous.clone())
         })),
@@ -432,7 +432,7 @@ fn refresh_gmail_token(
 ) -> Result<GmailTokenFile> {
     let refresh_token = previous.refresh_token.clone().ok_or_else(|| {
         anyhow!(
-            "token Gmail nie zawiera refresh_token; uruchom ponownie `lab onboard` (krok Gmail)"
+            "token Gmail nie zawiera refresh_token; uruchom ponownie `jdg-cli onboard` (krok Gmail)"
         )
     })?;
     let secret = read_google_client_secret(client_secret_path)?;
@@ -483,7 +483,7 @@ fn gmail_refresh_error(status: u16, body: &str) -> anyhow::Error {
         .unwrap_or_default();
     if matches!(status, 400 | 401 | 403) {
         anyhow!(
-            "autoryzacja Gmail wygasła albo została cofnięta (HTTP {status}{detail}); uruchom ponownie `lab onboard` (krok Gmail)"
+            "autoryzacja Gmail wygasła albo została cofnięta (HTTP {status}{detail}); uruchom ponownie `jdg-cli onboard` (krok Gmail)"
         )
     } else {
         anyhow!("odświeżenie tokenu Gmail nie powiodło się (HTTP {status}{detail})")
@@ -513,7 +513,7 @@ fn gmail_code_exchange_error(status: u16, body: &str) -> anyhow::Error {
         (None, _) => String::new(),
     };
     anyhow!(
-        "Google odrzucił wymianę kodu autoryzacji Gmail na token (HTTP {status}{detail}); uruchom ponownie `lab onboard` (krok Gmail)"
+        "Google odrzucił wymianę kodu autoryzacji Gmail na token (HTTP {status}{detail}); uruchom ponownie `jdg-cli onboard` (krok Gmail)"
     )
 }
 
@@ -529,7 +529,7 @@ fn gmail_call_with_refresh<T>(
     let access_token = token.refresh()?;
     call(&access_token)?.ok_or_else(|| {
         anyhow!(
-            "Gmail odrzucił odświeżony token (HTTP 401); uruchom ponownie `lab onboard` (krok Gmail)"
+            "Gmail odrzucił odświeżony token (HTTP 401); uruchom ponownie `jdg-cli onboard` (krok Gmail)"
         )
     })
 }
@@ -733,7 +733,7 @@ pub(crate) fn gmail_fetch(
 
 const STALE_TEMP_FILE_AGE: Duration = Duration::from_secs(60 * 60);
 
-// write_private_file writes `.<name>.lab-tmp-<suffix>` and renames it; a run killed
+// write_private_file writes `.<name>.jdg-cli-tmp-<suffix>` and renames it; a run killed
 // in between leaves it behind. A younger one may be a write still in progress
 // (the TUI and a sync can share the folder), so only old ones are removed.
 fn remove_stale_temp_files(dir: &Path, now: std::time::SystemTime) -> usize {
@@ -745,7 +745,7 @@ fn remove_stale_temp_files(dir: &Path, now: std::time::SystemTime) -> usize {
         let name = entry.file_name();
         if !name
             .to_str()
-            .is_some_and(|name| name.starts_with('.') && name.contains(".lab-tmp-"))
+            .is_some_and(|name| name.starts_with('.') && name.contains(".jdg-cli-tmp-"))
         {
             continue;
         }

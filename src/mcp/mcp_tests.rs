@@ -14,7 +14,7 @@ impl TempDir {
     fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "lab-mcp-{}-{}-{}",
+            "jdg-cli-mcp-{}-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -36,7 +36,7 @@ impl Drop for TempDir {
 
 /// Ścieżka bazy, której testy nie powinny nigdy otworzyć.
 fn unused_db() -> PathBuf {
-    std::env::temp_dir().join("lab-mcp-tests-must-not-exist.sqlite")
+    std::env::temp_dir().join("jdg-cli-mcp-tests-must-not-exist.sqlite")
 }
 
 fn serve(input: &[u8]) -> String {
@@ -372,7 +372,7 @@ fn unknown_tool_and_bad_arguments_object_are_invalid_params() {
 #[test]
 fn tool_execution_failure_is_error_result_not_jsonrpc_error() {
     let dir = TempDir::new();
-    let db = dir.join("lab.sqlite");
+    let db = dir.join("jdg-cli.sqlite");
     drop(open_db(&db).unwrap());
     // Pusta baza lokalna: brak przebiegu tri-reconcile → błąd wykonania.
     let response = call_tool(&db, "reconcile_status", serde_json::json!({"year": 1999}));
@@ -407,7 +407,7 @@ fn read_only_tools_fail_on_missing_database_without_creating_it() {
 fn reconcile_tool_applies_issue_year_rule_to_default_mail_only() {
     // Jawne pliki KSeF i Saldeo: reconcile nie pobiera niczego online, tylko otwiera bazę.
     let dir = TempDir::new();
-    let _root = set_test_lab_root(&dir.0);
+    let _root = set_test_jdg_root(&dir.0);
     let mail = [
         (
             "mail:dec",
@@ -437,7 +437,7 @@ fn reconcile_tool_applies_issue_year_rule_to_default_mail_only() {
     let (ksef, saldeo) = (dir.join("ksef.jsonl"), dir.join("saldeo.jsonl"));
     fs::write(&ksef, "").unwrap();
     fs::write(&saldeo, "").unwrap();
-    let db = dir.join("lab.sqlite");
+    let db = dir.join("jdg-cli.sqlite");
     let run = |mail: Option<PathBuf>| {
         let output = execute_mcp_tool(
             &db,

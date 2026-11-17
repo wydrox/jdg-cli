@@ -152,7 +152,7 @@ fn listener_ignores_stray_requests_until_the_callback() {
 fn listener_gives_up_after_timeout() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let err = wait_for_oauth_code(&listener, "S1", Duration::from_millis(200)).unwrap_err();
-    assert!(err.to_string().contains("lab onboard"), "{err}");
+    assert!(err.to_string().contains("jdg-cli onboard"), "{err}");
 }
 
 fn stored_token(expires_at: Option<DateTime<Utc>>, refresh: bool) -> GmailTokenFile {
@@ -262,7 +262,7 @@ fn failed_refresh_points_to_onboarding() {
             message.contains("wygasła albo została cofnięta"),
             "{message}"
         );
-        assert!(message.contains("lab onboard"), "{message}");
+        assert!(message.contains("jdg-cli onboard"), "{message}");
         assert!(
             !message.contains("expired or revoked"),
             "body not echoed: {message}"
@@ -309,7 +309,7 @@ impl Drop for SweepDir {
 fn stale_temp_files_are_swept_and_young_ones_kept() {
     use std::time::SystemTime;
     let dir = SweepDir(std::env::temp_dir().join(format!(
-        "lab-gmail-sweep-{}-{}",
+        "jdg-cli-gmail-sweep-{}-{}",
         std::process::id(),
         Utc::now().timestamp_nanos_opt().unwrap()
     )));
@@ -327,18 +327,18 @@ fn stale_temp_files_are_swept_and_young_ones_kept() {
             .unwrap();
         path
     };
-    let old_pdf_tmp = write(".msg1_1_a.pdf.lab-tmp-a1b2c3", two_hours_ago);
-    let old_jsonl_tmp = write(".records.jsonl.lab-tmp-12345", two_hours_ago);
+    let old_pdf_tmp = write(".msg1_1_a.pdf.jdg-cli-tmp-a1b2c3", two_hours_ago);
+    let old_jsonl_tmp = write(".records.jsonl.jdg-cli-tmp-12345", two_hours_ago);
     let young_tmp = write(
-        ".msg2_1_b.pdf.lab-tmp-d4e5f6",
+        ".msg2_1_b.pdf.jdg-cli-tmp-d4e5f6",
         now - Duration::from_secs(59 * 60),
     );
     let old_attachment = write("msg1_1_a.pdf", two_hours_ago);
     let old_hidden = write(".DS_Store", two_hours_ago);
-    let not_temp = write("x.lab-tmp-name.pdf", two_hours_ago);
+    let not_temp = write("x.jdg-cli-tmp-name.pdf", two_hours_ago);
     let nested = dir.0.join("nested");
     fs::create_dir(&nested).unwrap();
-    let nested_tmp = nested.join(".c.pdf.lab-tmp-777");
+    let nested_tmp = nested.join(".c.pdf.jdg-cli-tmp-777");
     fs::write(&nested_tmp, b"x").unwrap();
     fs::File::options()
         .write(true)
@@ -372,14 +372,14 @@ fn stale_temp_files_are_swept_and_young_ones_kept() {
 #[test]
 fn temp_sweep_does_not_follow_symlinks() {
     let dir = SweepDir(std::env::temp_dir().join(format!(
-        "lab-gmail-sweep-link-{}-{}",
+        "jdg-cli-gmail-sweep-link-{}-{}",
         std::process::id(),
         Utc::now().timestamp_nanos_opt().unwrap()
     )));
     fs::create_dir(&dir.0).unwrap();
     let target = dir.0.join("target.pdf");
     fs::write(&target, b"keep").unwrap();
-    let link = dir.0.join(".target.pdf.lab-tmp-link");
+    let link = dir.0.join(".target.pdf.jdg-cli-tmp-link");
     std::os::unix::fs::symlink(&target, &link).unwrap();
     let later = std::time::SystemTime::now() + Duration::from_secs(3 * 60 * 60);
     assert_eq!(remove_stale_temp_files(&dir.0, later), 0);
@@ -403,7 +403,10 @@ fn failed_code_exchange_names_the_step_and_codes_without_the_body() {
         message.contains("invalid_grant: Code was already redeemed."),
         "{message}"
     );
-    assert!(message.contains("`lab onboard` (krok Gmail)"), "{message}");
+    assert!(
+        message.contains("`jdg-cli onboard` (krok Gmail)"),
+        "{message}"
+    );
     assert!(!message.contains("do-not-echo"), "{message}");
     assert!(!message.contains('{'), "{message}");
 
@@ -420,7 +423,7 @@ fn failed_code_exchange_names_the_step_and_codes_without_the_body() {
     ] {
         let message = gmail_code_exchange_error(502, body).to_string();
         assert!(message.contains("(HTTP 502)"), "{message}");
-        assert!(message.contains("lab onboard"), "{message}");
+        assert!(message.contains("jdg-cli onboard"), "{message}");
     }
     let long = format!(
         r#"{{"error":"invalid_request","error_description":"{}"}}"#,
@@ -434,7 +437,7 @@ fn failed_code_exchange_names_the_step_and_codes_without_the_body() {
 }
 
 #[test]
-fn browser_for_oauth_gets_no_lab_secrets() {
+fn browser_for_oauth_gets_no_jdg_secrets() {
     let command = oauth_browser_command("https://accounts.example.test/auth?x=1");
     assert_eq!(command.get_program(), "open");
     assert_eq!(

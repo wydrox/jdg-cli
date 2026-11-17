@@ -91,11 +91,11 @@ pub(crate) fn interactive_reconcile_actions(db_path: &Path) -> Result<()> {
         match run_invoice_table_tui(&mut rows, &mut year, &mut review_score, db_path)? {
             TuiResult::Cancel => return Ok(()),
             TuiResult::Doctor => {
-                eprintln!("  [LAB] diagnostyka...");
+                eprintln!("  [jdg-cli] diagnostyka...");
                 doctor(db_path, "GMAIL_ACCESS_TOKEN")?;
             }
             TuiResult::Onboard => {
-                eprintln!("  [LAB] konfiguracja...");
+                eprintln!("  [jdg-cli] konfiguracja...");
                 onboard(db_path, false, None)?;
             }
             TuiResult::Correct(record) => {
@@ -122,21 +122,21 @@ struct TuiTheme {
 /// Zmienne środowiska, z których wynika motyw TUI.
 #[derive(Debug, Clone, Default)]
 struct ThemeInputs {
-    /// `LAB_THEME=light|dark`; inna wartość jest pomijana.
-    lab_theme: Option<String>,
-    lab_tui_theme: Option<String>,
+    /// `JDG_THEME=light|dark`; inna wartość jest pomijana.
+    jdg_theme: Option<String>,
+    jdg_tui_theme: Option<String>,
     term_background: Option<String>,
     colorfgbg: Option<String>,
     term_program: Option<String>,
 }
 
-/// Czy motyw jasny. Kolejność: `LAB_THEME` (light/dark), `LAB_TUI_THEME`, `TERM_BACKGROUND`,
+/// Czy motyw jasny. Kolejność: `JDG_THEME` (light/dark), `JDG_TUI_THEME`, `TERM_BACKGROUND`,
 /// `COLORFGBG` (tło 7 albo ≥15 = jasne); potem, tylko w Terminal.app (`TERM_PROGRAM=Apple_Terminal`),
 /// wygląd systemu z `system_is_dark` (`None` = nieznany); w pozostałych przypadkach ciemny.
 /// `system_is_dark` jest wołane tylko wtedy, gdy nic wcześniej nie rozstrzygnęło.
 fn theme_is_light(inputs: &ThemeInputs, system_is_dark: impl FnOnce() -> Option<bool>) -> bool {
     match inputs
-        .lab_theme
+        .jdg_theme
         .as_deref()
         .map(|value| value.trim().to_ascii_lowercase())
         .as_deref()
@@ -145,7 +145,7 @@ fn theme_is_light(inputs: &ThemeInputs, system_is_dark: impl FnOnce() -> Option<
         Some("dark") => return false,
         _ => {}
     }
-    if let Some(value) = &inputs.lab_tui_theme {
+    if let Some(value) = &inputs.jdg_tui_theme {
         return matches!(value.to_ascii_lowercase().as_str(), "light" | "jasny");
     }
     if let Some(value) = &inputs.term_background {
@@ -203,8 +203,8 @@ impl TuiTheme {
     fn detect() -> Self {
         let var = |name: &str| std::env::var(name).ok();
         let inputs = ThemeInputs {
-            lab_theme: var("LAB_THEME"),
-            lab_tui_theme: var("LAB_TUI_THEME"),
+            jdg_theme: var("JDG_THEME"),
+            jdg_tui_theme: var("JDG_TUI_THEME"),
             term_background: var("TERM_BACKGROUND"),
             colorfgbg: var("COLORFGBG"),
             term_program: var("TERM_PROGRAM"),
@@ -1700,21 +1700,21 @@ impl StderrRedirectSlot {
 
 static STDERR_REDIRECT: Mutex<StderrRedirectSlot> = Mutex::new(StderrRedirectSlot::new());
 
-/// Default log location: `~/Library/Logs/lab/lab.log` (`LAB_LOG` overrides it).
-pub(crate) fn default_lab_log_path(home: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
+/// Default log location: `~/Library/Logs/jdg-cli/jdg-cli.log` (`JDG_LOG` overrides it).
+pub(crate) fn default_jdg_log_path(home: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
     let home = home.filter(|home| !home.is_empty())?;
     Some(
         PathBuf::from(home)
             .join("Library")
             .join("Logs")
-            .join("lab")
-            .join("lab.log"),
+            .join("jdg-cli")
+            .join("jdg-cli.log"),
     )
 }
 
 /// Opens a log for appending. New files are created with mode 0600; with `private` the
 /// parent directory is created with mode 0700 and an existing file is tightened to 0600.
-pub(crate) fn open_lab_log_file(path: &Path, private: bool) -> std::io::Result<std::fs::File> {
+pub(crate) fn open_jdg_log_file(path: &Path, private: bool) -> std::io::Result<std::fs::File> {
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     if private && let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::DirBuilder::new()
@@ -1733,23 +1733,23 @@ pub(crate) fn open_lab_log_file(path: &Path, private: bool) -> std::io::Result<s
     Ok(file)
 }
 
-fn open_lab_log() -> std::io::Result<std::fs::File> {
-    if let Some(path) = std::env::var_os("LAB_LOG").filter(|value| !value.is_empty()) {
-        return open_lab_log_file(Path::new(&path), false);
+fn open_jdg_log() -> std::io::Result<std::fs::File> {
+    if let Some(path) = std::env::var_os("JDG_LOG").filter(|value| !value.is_empty()) {
+        return open_jdg_log_file(Path::new(&path), false);
     }
-    let path = default_lab_log_path(std::env::var_os("HOME").as_deref()).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "brak HOME dla logu LAB")
+    let path = default_jdg_log_path(std::env::var_os("HOME").as_deref()).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "brak HOME dla logu jdg-cli")
     })?;
-    open_lab_log_file(&path, true)
+    open_jdg_log_file(&path, true)
 }
 
-/// Redirects the process-wide stderr (fd 2) to the LAB log so background work cannot draw
+/// Redirects the process-wide stderr (fd 2) to the jdg-cli log so background work cannot draw
 /// over the TUI. Idempotent; undone by `restore_stderr`.
 pub(crate) fn redirect_stderr_to_log() -> bool {
     STDERR_REDIRECT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .ensure(libc::STDERR_FILENO, open_lab_log)
+        .ensure(libc::STDERR_FILENO, open_jdg_log)
 }
 
 /// Puts the original stderr back (no-op when it is not redirected).
@@ -1904,7 +1904,7 @@ pub(crate) fn invoice_table_quit_request(operation_running: bool, warned: bool) 
 }
 
 pub(crate) const QUIT_WHILE_RUNNING_WARNING: &str =
-    "Trwa operacja — ponowne q/Esc przerwie ją i zamknie LAB";
+    "Trwa operacja — ponowne q/Esc przerwie ją i zamknie jdg-cli";
 pub(crate) const BUSY_NOTICE: &str = "Trwa operacja — poczekaj na zakończenie";
 
 pub(crate) fn invoice_table_help_text(actionable_only: bool) -> &'static str {
@@ -2279,7 +2279,7 @@ pub(crate) fn run_invoice_table_tui(
             .block(
                 Block::default()
                     .title(format!(
-                        " LAB faktury {year} · zgodność 3way {review_score} · s: sort {} {} · Shift+s: kierunek ",
+                        " jdg-cli faktury {year} · zgodność 3way {review_score} · s: sort {} {} · Shift+s: kierunek ",
                         SORT_LABELS[sort_column],
                         if sort_column == 0 { "" } else if sort_descending { "↓" } else { "↑" },
                     ))

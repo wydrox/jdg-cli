@@ -622,7 +622,7 @@ pub(crate) fn write_reconcile_human(
     temporal_diff: Option<&TemporalDiffSummary>,
 ) -> Result<()> {
     let mut out = String::new();
-    out.push_str("LAB reconcile\n");
+    out.push_str("jdg-cli reconcile\n");
     out.push_str(&format!(
         "generated: {} | review_score: {}\n\n",
         report.generated_at, report.review_score
@@ -688,7 +688,7 @@ pub(crate) fn write_reconcile_human(
     } else {
         out.push('\n');
     }
-    out.push_str("\nPełny JSON: lab reconcile --raw\n");
+    out.push_str("\nPełny JSON: jdg-cli reconcile --raw\n");
     print!("{out}");
     Ok(())
 }

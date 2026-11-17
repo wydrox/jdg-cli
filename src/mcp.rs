@@ -244,7 +244,7 @@ pub(crate) fn handle_mcp_request(
         "initialize" => Ok(serde_json::json!({
             "protocolVersion": negotiate_protocol_version(params),
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "lab-mcp", "version": env!("CARGO_PKG_VERSION") }
+            "serverInfo": { "name": "jdg-cli-mcp", "version": env!("CARGO_PKG_VERSION") }
         })),
         "ping" => Ok(serde_json::json!({})),
         "tools/list" => Ok(serde_json::json!({ "tools": mcp_tools() })),
@@ -391,7 +391,7 @@ pub(crate) fn mcp_tools() -> Value {
         },
         {
             "name": "upload",
-            "description": "Upload invoices missing in Saldeo. Dry run by default: without confirm=true it only returns the upload plan. Uses tri_report, or mail+ksef+saldeo paths, or the cached data for the year (refreshed from Saldeo first when confirm=true). Same flow as `lab upload`: the result is isError (with the plan) whenever the CLI would exit non-zero, e.g. a failed or unconfirmed file.",
+            "description": "Upload invoices missing in Saldeo. Dry run by default: without confirm=true it only returns the upload plan. Uses tri_report, or mail+ksef+saldeo paths, or the cached data for the year (refreshed from Saldeo first when confirm=true). Same flow as `jdg-cli upload`: the result is isError (with the plan) whenever the CLI would exit non-zero, e.g. a failed or unconfirmed file.",
             "inputSchema": {"type":"object","properties":{
                 "year":year,
                 "tri_report":{"type":"string","description":"Path to tri-reconcile report JSON"},
@@ -716,7 +716,7 @@ pub(crate) fn execute_mcp_tool(db_path: &Path, call: McpToolCall) -> Result<McpT
     }
 }
 
-/// Upload: ten sam przebieg co `lab upload` ([`run_upload_flow`]), więc CLI i MCP
+/// Upload: ten sam przebieg co `jdg-cli upload` ([`run_upload_flow`]), więc CLI i MCP
 /// nie mogą się rozjechać. Błąd planowania (nic nie wysłano) kończy narzędzie bez planu.
 fn execute_mcp_upload(db_path: &Path, args: McpUploadArgs) -> Result<McpToolOutput> {
     let outcome = run_upload_flow(

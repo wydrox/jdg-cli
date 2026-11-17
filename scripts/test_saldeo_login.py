@@ -11,7 +11,7 @@ from pathlib import Path
 SCRIPT = Path(__file__).with_name("saldeo-login.js")
 
 # Stub `playwright`: the first launch fails (main Helium profile busy), so the script
-# falls back to a temporary `lab-helium-*` profile; STUB_MODE picks what happens next.
+# falls back to a temporary `jdg-cli-helium-*` profile; STUB_MODE picks what happens next.
 STUB_PLAYWRIGHT = r"""
 const fs = require("fs");
 const path = require("path");
@@ -76,7 +76,7 @@ if (data.username !== "jan" || data.password !== "tajne-haslo") process.exit(2);
 
     def test_script_does_not_use_argv_for_password(self):
         text = Path(__file__).with_name("saldeo-login.js").read_text()
-        self.assertIn("LAB_SALDEO_LOGIN_FILE", text)
+        self.assertIn("JDG_SALDEO_LOGIN_FILE", text)
         self.assertNotIn("process.argv[", text)
         self.assertNotIn("SALDEO_PASSWORD", text)
 
@@ -127,10 +127,10 @@ process.stdout.write(JSON.stringify({expr}));
         )
         self.assertEqual(got, {"ok": True, "no_status": True, "error_status": False, "html": False, "unauthorized": False})
 
-    def test_sweep_removes_only_stale_lab_profiles(self):
+    def test_sweep_removes_only_stale_jdg_profiles(self):
         with tempfile.TemporaryDirectory() as tmp:
-            stale = Path(tmp) / "lab-helium-old"
-            fresh = Path(tmp) / "lab-helium-new"
+            stale = Path(tmp) / "jdg-cli-helium-old"
+            fresh = Path(tmp) / "jdg-cli-helium-new"
             unrelated = Path(tmp) / "other-old"
             for d in (stale, fresh, unrelated):
                 d.mkdir()
@@ -145,7 +145,7 @@ process.stdout.write(JSON.stringify({expr}));
 
 
 class SaldeoLoginTempProfileTests(unittest.TestCase):
-    """Runs the script as `lab` does, with a stub playwright, and checks that the
+    """Runs the script as `jdg-cli` does, with a stub playwright, and checks that the
     temporary profile is gone on every exit path."""
 
     def setUp(self):
@@ -165,7 +165,7 @@ class SaldeoLoginTempProfileTests(unittest.TestCase):
             "HOME": str(self.home),
             "TMPDIR": str(self.tmpdir),
             "NODE_PATH": str(root / "node_modules"),
-            "LAB_SALDEO_STORAGE_STATE": str(self.out),
+            "JDG_SALDEO_STORAGE_STATE": str(self.out),
             "HELIUM_EXECUTABLE": "/nonexistent/helium",
             "STUB_CLOSE_MARK": str(self.close_mark),
         }
@@ -174,7 +174,7 @@ class SaldeoLoginTempProfileTests(unittest.TestCase):
         self._tmp.cleanup()
 
     def profiles(self):
-        return sorted(p.name for p in self.tmpdir.iterdir() if p.name.startswith("lab-helium-"))
+        return sorted(p.name for p in self.tmpdir.iterdir() if p.name.startswith("jdg-cli-helium-"))
 
     def run_script(self, mode, timeout_ms="5000", timeout=30):
         env = dict(self.env, STUB_MODE=mode, SALDEO_AUTH_TIMEOUT_MS=timeout_ms)
@@ -183,7 +183,7 @@ class SaldeoLoginTempProfileTests(unittest.TestCase):
     def test_success_removes_temp_profile(self):
         result = self.run_script("ok")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("lab-helium-", result.stderr)
+        self.assertIn("jdg-cli-helium-", result.stderr)
         self.assertTrue(self.out.exists())
         self.assertEqual(self.close_mark.read_text(), "dir-present")
         self.assertEqual(self.profiles(), [])
@@ -200,7 +200,7 @@ class SaldeoLoginTempProfileTests(unittest.TestCase):
         self.assertEqual(self.profiles(), [])
 
     def test_watchdog_timeout_removes_temp_profile(self):
-        # Navigation hangs; the watchdog fires at timeout + 10 s, before `lab` would SIGKILL.
+        # Navigation hangs; the watchdog fires at timeout + 10 s, before `jdg-cli` would SIGKILL.
         start = time.monotonic()
         result = self.run_script("hang", timeout_ms="100")
         self.assertEqual(result.returncode, 2, result.stderr)

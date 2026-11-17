@@ -11,6 +11,7 @@ pub(crate) fn retain_mail_candidates_for_year(
     before - candidates.len()
 }
 
+// Identyfikator formatu zapisany w danych (cache, rejestr wysyłek) — nie zmieniać.
 const MAIL_PARSER_VERSION_PREFIX: &str = "lab-mail-parser:";
 const MAIL_PARSER_VERSION: &str = "lab-mail-parser:v5";
 
@@ -178,7 +179,7 @@ fn sync_mail_records_with_parser(
         if current_version && !mail_parse_needs_retry(record) {
             continue;
         }
-        let Some(path) = record.source_path.as_deref().map(resolve_lab_source_path) else {
+        let Some(path) = record.source_path.as_deref().map(resolve_jdg_source_path) else {
             continue;
         };
         if !path.is_file()
@@ -238,7 +239,7 @@ fn sync_mail_records_with_parser(
     let known_paths = records
         .iter()
         .filter_map(|record| record.source_path.as_deref())
-        .filter_map(|path| fs::canonicalize(resolve_lab_source_path(path)).ok())
+        .filter_map(|path| fs::canonicalize(resolve_jdg_source_path(path)).ok())
         .collect::<HashSet<_>>();
     let mut paths = saved_files.iter().map(PathBuf::from).collect::<Vec<_>>();
     paths.extend(files_on_disk);

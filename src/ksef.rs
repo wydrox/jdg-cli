@@ -455,9 +455,9 @@ pub(crate) fn ksef_online_config() -> Result<KsefOnlineConfig> {
 }
 
 fn ksef_context() -> (String, String) {
-    let context_type = lab_config_var("KSEF_CONTEXT_TYPE").unwrap_or_else(|| "Nip".to_string());
-    let raw_context = lab_config_var("KSEF_CONTEXT_NIP")
-        .or_else(|| lab_config_var("KSEF_NIP"))
+    let context_type = jdg_config_var("KSEF_CONTEXT_TYPE").unwrap_or_else(|| "Nip".to_string());
+    let raw_context = jdg_config_var("KSEF_CONTEXT_NIP")
+        .or_else(|| jdg_config_var("KSEF_NIP"))
         .unwrap_or_else(|| DEFAULT_PRODUCTMESH_NIP.to_string());
     let context_value = if context_type.eq_ignore_ascii_case("Nip") {
         normalize_tax_id(&raw_context).unwrap_or(raw_context)
@@ -477,8 +477,8 @@ pub(crate) fn is_missing_ksef_token(err: &anyhow::Error) -> bool {
 }
 
 pub(crate) fn ksef_base_url() -> String {
-    let url = lab_config_var("KSEF_BASE_URL").unwrap_or_else(|| {
-        match lab_config_var("KSEF_ENV")
+    let url = jdg_config_var("KSEF_BASE_URL").unwrap_or_else(|| {
+        match jdg_config_var("KSEF_ENV")
             .unwrap_or_else(|| "prod".to_string())
             .to_ascii_lowercase()
             .as_str()
@@ -495,14 +495,14 @@ pub(crate) fn ksef_base_url() -> String {
 
 pub(crate) fn ksef_http_timeout() -> Duration {
     Duration::from_secs(
-        lab_config_var("KSEF_TIMEOUT_SECS")
+        jdg_config_var("KSEF_TIMEOUT_SECS")
             .and_then(|value| value.parse().ok())
             .unwrap_or(60),
     )
 }
 
 pub(crate) fn ksef_metadata_page_size() -> usize {
-    lab_config_var("KSEF_PAGE_SIZE")
+    jdg_config_var("KSEF_PAGE_SIZE")
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(250)
         .clamp(10, 250)
@@ -659,7 +659,7 @@ fn ksef_identity_refusal(
 }
 
 pub(crate) fn ksef_cache_ttl() -> Option<Duration> {
-    ksef_cache_ttl_from(lab_config_var("KSEF_CACHE_TTL_MINS").as_deref())
+    ksef_cache_ttl_from(jdg_config_var("KSEF_CACHE_TTL_MINS").as_deref())
 }
 
 fn ksef_cache_ttl_from(value: Option<&str>) -> Option<Duration> {
@@ -756,7 +756,7 @@ pub(crate) fn format_duration_short(duration: Duration) -> String {
 }
 
 pub(crate) fn ksef_subject_types() -> Vec<String> {
-    lab_config_var("KSEF_SUBJECT_TYPES")
+    jdg_config_var("KSEF_SUBJECT_TYPES")
         .map(|value| {
             value
                 .split(',')
@@ -835,7 +835,7 @@ pub(crate) fn ksef_access_token(
     client: &Client,
     config: &KsefOnlineConfig,
 ) -> Result<KsefAccessToken> {
-    if let Some(token) = lab_config_var("KSEF_ACCESS_TOKEN") {
+    if let Some(token) = jdg_config_var("KSEF_ACCESS_TOKEN") {
         return Ok(KsefAccessToken {
             token,
             valid_until: None,
@@ -874,7 +874,7 @@ fn ksef_renew_access_token(
     let Some(rejected) = rejected else {
         return ksef_access_token(client, config);
     };
-    if lab_config_var("KSEF_ACCESS_TOKEN").is_some() {
+    if jdg_config_var("KSEF_ACCESS_TOKEN").is_some() {
         return Err(anyhow!(
             "KSeF odrzucił KSEF_ACCESS_TOKEN (HTTP 401); usuń tę zmienną albo ustaw ważny token"
         ));
@@ -1117,10 +1117,10 @@ pub(crate) fn ksef_encrypt_token_with_certificate(
         std::process::id(),
         Utc::now().timestamp_nanos_opt().unwrap_or_default()
     );
-    let cert_path = tmp_dir.join(format!("lab-ksef-{nonce}.der"));
-    let pub_path = tmp_dir.join(format!("lab-ksef-{nonce}.pem"));
-    let plain_path = tmp_dir.join(format!("lab-ksef-{nonce}.txt"));
-    let encrypted_path = tmp_dir.join(format!("lab-ksef-{nonce}.bin"));
+    let cert_path = tmp_dir.join(format!("jdg-cli-ksef-{nonce}.der"));
+    let pub_path = tmp_dir.join(format!("jdg-cli-ksef-{nonce}.pem"));
+    let plain_path = tmp_dir.join(format!("jdg-cli-ksef-{nonce}.txt"));
+    let encrypted_path = tmp_dir.join(format!("jdg-cli-ksef-{nonce}.bin"));
 
     let result = (|| -> Result<String> {
         let cert = STANDARD
@@ -1353,7 +1353,7 @@ pub(crate) fn ksef_rate_limit_path(group: &str) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join(format!("ksef-rate-{group}.json"))
 }
 
@@ -1388,7 +1388,7 @@ pub(crate) fn default_ksef_access_token_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
-        .join("lab")
+        .join("jdg-cli")
         .join("ksef_access_token.json")
 }
 
@@ -1478,7 +1478,7 @@ mod tests {
 
     fn temp_root(tag: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "lab-ksef-{tag}-{}-{}",
+            "jdg-cli-ksef-{tag}-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap_or(0)
         ));
@@ -1851,7 +1851,7 @@ mod tests {
     #[test]
     fn online_config_does_not_require_ksef_token() {
         let root = std::env::temp_dir().join(format!(
-            "lab-ksef-config-{}-{}",
+            "jdg-cli-ksef-config-{}-{}",
             std::process::id(),
             Utc::now().timestamp_nanos_opt().unwrap_or(0)
         ));

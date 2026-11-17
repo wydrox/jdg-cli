@@ -8,7 +8,7 @@ impl TempDir {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "lab-mail-sources-{name}-{}-{id}",
+            "jdg-cli-mail-sources-{name}-{}-{id}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&root);
@@ -129,7 +129,7 @@ fn files_missing_both_is_an_error_as_before() {
 #[test]
 fn default_candidates_of_the_year_include_the_amazon_preset() {
     let tmp = TempDir::new("default");
-    let _root = set_test_lab_root(&tmp.0);
+    let _root = set_test_jdg_root(&tmp.0);
     write(
         &default_mail_candidates_path(2026),
         &[invoice("a", "FV/1", "1111111111", 100)],
@@ -154,7 +154,7 @@ fn default_candidates_of_the_year_include_the_amazon_preset() {
 #[test]
 fn explicit_mail_path_is_read_alone() {
     let tmp = TempDir::new("explicit");
-    let _root = set_test_lab_root(&tmp.0);
+    let _root = set_test_jdg_root(&tmp.0);
     write(
         &default_amazon_mail_candidates_path(2026),
         &[invoice("b", "IT-1", "2222222222", 200)],

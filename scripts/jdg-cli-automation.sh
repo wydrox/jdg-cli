@@ -1,28 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${LAB_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ROOT="${JDG_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}" .sh)"
-LOG_DIR="${LAB_LOG_DIR:-$HOME/Library/Logs/lab}"
-LOCK_DIR="${LAB_LOCK_DIR:-$HOME/Library/Caches/lab/automation.lock}"
+LOG_DIR="${JDG_LOG_DIR:-$HOME/Library/Logs/jdg-cli}"
+LOCK_DIR="${JDG_LOCK_DIR:-$HOME/Library/Caches/jdg-cli/automation.lock}"
 LOG_FILE="$LOG_DIR/automation.log"
 # automation.log is rotated at the start of a run once it exceeds LOG_MAX_BYTES;
 # LOG_KEEP old copies are kept (automation.log.1 is the newest).
 LOG_MAX_BYTES=$((5 * 1024 * 1024))
 LOG_KEEP=3
-# Error text the binary prints (with LAB_NONINTERACTIVE=1) instead of opening a login window.
+# Error text the binary prints (with JDG_NONINTERACTIVE=1) instead of opening a login window.
 SESSION_EXPIRED_PHRASE="Saldeo session expired"
 
-# Explicit LAB_BIN wins; else ~/.local/bin/lab, else ~/.local/bin/jdg-cli, else the legacy ~/.local/bin/lab-cli.
-resolve_lab_bin() {
-  if [[ -n "${LAB_BIN:-}" ]]; then
-    printf '%s\n' "$LAB_BIN"
-  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/jdg-cli" ]]; then
-    printf '%s\n' "$HOME/.local/bin/jdg-cli"
-  elif [[ ! -e "$HOME/.local/bin/lab" && -x "$HOME/.local/bin/lab-cli" ]]; then
-    printf '%s\n' "$HOME/.local/bin/lab-cli"
+# Explicit JDG_BIN wins; else ~/.local/bin/jdg-cli.
+resolve_jdg_bin() {
+  if [[ -n "${JDG_BIN:-}" ]]; then
+    printf '%s\n' "$JDG_BIN"
   else
-    printf '%s\n' "$HOME/.local/bin/lab"
+    printf '%s\n' "$HOME/.local/bin/jdg-cli"
   fi
 }
 
@@ -226,9 +222,9 @@ run_year() {
   FAILED_STEP=""
 
   log "Start year=$year"
-  run_step "sync" "$LAB_BIN" sync --year "$year"
-  run_step "reconcile" "$LAB_BIN" reconcile --year "$year" --store --raw --output "$LOG_DIR/reconcile-$year.json"
-  run_step "repair" "$LAB_BIN" repair --year "$year" --confirm --output "$LOG_DIR/repair-$year.json"
+  run_step "sync" "$JDG_BIN" sync --year "$year"
+  run_step "reconcile" "$JDG_BIN" reconcile --year "$year" --store --raw --output "$LOG_DIR/reconcile-$year.json"
+  run_step "repair" "$JDG_BIN" repair --year "$year" --confirm --output "$LOG_DIR/repair-$year.json"
   if [[ "$YEAR_STATUS" -eq 0 ]]; then
     # Never report an earlier run's upload result as this run's.
     if rm -f "$upload_json"; then
@@ -239,9 +235,9 @@ run_year() {
       FAILED_STEP="upload (stale output)"
     fi
   fi
-  run_step "upload" "$LAB_BIN" upload --year "$year" --confirm --approve --output "$upload_json"
-  run_step "sync --saldeo" "$LAB_BIN" sync --saldeo --year "$year"
-  run_step "final reconcile" "$LAB_BIN" reconcile --year "$year" --store --raw --output "$LOG_DIR/reconcile-after-upload-$year.json"
+  run_step "upload" "$JDG_BIN" upload --year "$year" --confirm --approve --output "$upload_json"
+  run_step "sync --saldeo" "$JDG_BIN" sync --saldeo --year "$year"
+  run_step "final reconcile" "$JDG_BIN" reconcile --year "$year" --store --raw --output "$LOG_DIR/reconcile-after-upload-$year.json"
 
   YEAR_SUMMARY="year=$year"
   if [[ "$YEAR_STATUS" -ne 0 ]]; then
@@ -263,16 +259,16 @@ main() {
   prepare_log_dir
   mkdir -p "$(dirname "$LOCK_DIR")"
   # Unattended: the binary must never open a Saldeo login window. An explicit
-  # LAB_NONINTERACTIVE in the environment (e.g. 0 for a manual run) wins.
-  export LAB_NONINTERACTIVE="${LAB_NONINTERACTIVE:-1}"
+  # JDG_NONINTERACTIVE in the environment (e.g. 0 for a manual run) wins.
+  export JDG_NONINTERACTIVE="${JDG_NONINTERACTIVE:-1}"
 
   local lock_status=0
   acquire_lock || lock_status=$?
   if [[ "$lock_status" -eq 1 ]]; then
-    log "Another LAB automation run is active (pid $LOCK_HOLDER); exiting."
+    log "Another jdg-cli automation run is active (pid $LOCK_HOLDER); exiting."
     exit 0
   elif [[ "$lock_status" -ne 0 ]]; then
-    notify "LAB automation failed" "Cannot remove stale lock $LOCK_DIR"
+    notify "jdg-cli automation failed" "Cannot remove stale lock $LOCK_DIR"
     exit 1
   fi
   trap release_lock EXIT
@@ -281,28 +277,28 @@ main() {
   trap 'exit 143' TERM
   rotate_log
 
-  LAB_BIN="$(resolve_lab_bin)"
-  if [[ ! -x "$LAB_BIN" ]]; then
-    log "ERROR: LAB binary not executable: $LAB_BIN"
-    notify "LAB automation failed" "LAB binary not executable: $LAB_BIN"
+  JDG_BIN="$(resolve_jdg_bin)"
+  if [[ ! -x "$JDG_BIN" ]]; then
+    log "ERROR: jdg-cli binary not executable: $JDG_BIN"
+    notify "jdg-cli automation failed" "jdg-cli binary not executable: $JDG_BIN"
     exit 1
   fi
 
   local years
-  if [[ -n "${LAB_YEAR:-}" ]]; then
-    if [[ ! "$LAB_YEAR" =~ ^[0-9]{4}$ ]]; then
-      log "ERROR: LAB_YEAR must be a 4-digit year, got: $LAB_YEAR"
-      notify "LAB automation failed" "Invalid LAB_YEAR: $LAB_YEAR"
+  if [[ -n "${JDG_YEAR:-}" ]]; then
+    if [[ ! "$JDG_YEAR" =~ ^[0-9]{4}$ ]]; then
+      log "ERROR: JDG_YEAR must be a 4-digit year, got: $JDG_YEAR"
+      notify "jdg-cli automation failed" "Invalid JDG_YEAR: $JDG_YEAR"
       exit 1
     fi
-    years="$LAB_YEAR"
+    years="$JDG_YEAR"
   else
     years="$(automation_years "$(date +%Y)" "$(date +%m)")"
   fi
 
   cd "$ROOT"
 
-  log "Start automation years=$years root=$ROOT bin=$LAB_BIN noninteractive=$LAB_NONINTERACTIVE"
+  log "Start automation years=$years root=$ROOT bin=$JDG_BIN noninteractive=$JDG_NONINTERACTIVE"
 
   local status=0 year summaries=""
   for year in $years; do
@@ -319,12 +315,12 @@ main() {
     log "FAILED with status=$status. $summaries"
   fi
   if [[ "$SAW_SESSION_EXPIRED" -eq 1 ]]; then
-    log "Saldeo session expired; log in with: lab onboard"
-    notify "LAB: Saldeo login needed" "Saldeo session expired. Run \`lab onboard\` in Terminal to log in. $summaries"
+    log "Saldeo session expired; log in with: jdg-cli onboard"
+    notify "jdg-cli: Saldeo login needed" "Saldeo session expired. Run \`jdg-cli onboard\` in Terminal to log in. $summaries"
   elif [[ "$status" -eq 0 ]]; then
-    notify "LAB automation done" "$summaries"
+    notify "jdg-cli automation done" "$summaries"
   else
-    notify "LAB automation failed" "$summaries. Check $LOG_FILE"
+    notify "jdg-cli automation failed" "$summaries. Check $LOG_FILE"
   fi
 
   exit "$status"

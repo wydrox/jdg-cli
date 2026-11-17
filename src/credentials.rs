@@ -10,7 +10,7 @@ pub(crate) const ACCOUNT_SALDEO_USERNAME: &str = "saldeo_username";
 pub(crate) const ACCOUNT_SALDEO_PASSWORD: &str = "saldeo_password";
 pub(crate) const ACCOUNT_OPENROUTER_API_KEY: &str = "openrouter_api_key";
 
-/// Klucze, których LAB nie zapisuje już w ~/.config/lab/env.
+/// Klucze, których jdg-cli nie zapisuje już w ~/.config/jdg-cli/env.
 pub(crate) const SECRET_ENV_KEYS: [&str; 5] = [
     "KSEF_TOKEN",
     "KSEF_CERT_PASSWORD",
@@ -38,7 +38,7 @@ pub(crate) enum SecretSource {
     Keychain,
     File,
     Missing,
-    /// Plik z sekretem ma prawa szersze niż 600; LAB go nie użył.
+    /// Plik z sekretem ma prawa szersze niż 600; jdg-cli go nie użył.
     Insecure(PathBuf),
 }
 
@@ -82,11 +82,11 @@ impl SavedSecret {
     pub(crate) fn describe(&self) -> String {
         match (&self.file, self.keychain) {
             (Some(path), true) => format!(
-                "w {} (plik 600) i w macOS Keychain (lab-cli)",
+                "w {} (plik 600) i w macOS Keychain (jdg-cli)",
                 path.display()
             ),
             (Some(path), false) => format!("w {} (plik 600)", path.display()),
-            (None, true) => "w macOS Keychain (lab-cli)".to_string(),
+            (None, true) => "w macOS Keychain (jdg-cli)".to_string(),
             (None, false) => "nigdzie".to_string(),
         }
     }
@@ -205,7 +205,7 @@ impl Secret {
 }
 
 /// Para loginu Saldeo. Samo `SALDEO_USERNAME` (albo samo hasło) to brak danych logowania:
-/// LAB loguje ręcznie w Helium i ostrzega na stderr, zamiast przerywać.
+/// jdg-cli loguje ręcznie w Helium i ostrzega na stderr, zamiast przerywać.
 pub(crate) fn saldeo_login_pair() -> Result<Option<(String, String)>> {
     let username = secret_value(Secret::SaldeoUsername)?;
     let password = secret_value(Secret::SaldeoPassword)?;
@@ -215,21 +215,21 @@ pub(crate) fn saldeo_login_pair() -> Result<Option<(String, String)>> {
         (Some(_), None) => {
             warn_once(
                 "saldeo-login:username-only".to_string(),
-                "Saldeo: jest SALDEO_USERNAME bez SALDEO_PASSWORD; loguję ręcznie w Helium (ustaw hasło w lab onboard)",
+                "Saldeo: jest SALDEO_USERNAME bez SALDEO_PASSWORD; loguję ręcznie w Helium (ustaw hasło w jdg-cli onboard)",
             );
             Ok(None)
         }
         (None, Some(_)) => {
             warn_once(
                 "saldeo-login:password-only".to_string(),
-                "Saldeo: jest SALDEO_PASSWORD bez SALDEO_USERNAME; loguję ręcznie w Helium (ustaw login w lab onboard)",
+                "Saldeo: jest SALDEO_PASSWORD bez SALDEO_USERNAME; loguję ręcznie w Helium (ustaw login w jdg-cli onboard)",
             );
             Ok(None)
         }
     }
 }
 
-/// Kolejność: env procesu → `.env` → plik 0600 → opcjonalnie Keychain (`LAB_USE_KEYCHAIN=1`).
+/// Kolejność: env procesu → `.env` → plik 0600 → opcjonalnie Keychain (`JDG_USE_KEYCHAIN=1`).
 pub(crate) fn secret_value(secret: Secret) -> Result<Option<String>> {
     Ok(resolve_secret(secret)?.0)
 }
@@ -255,7 +255,7 @@ pub(crate) fn secret_is_set(secret: Secret) -> bool {
     secret_source(secret).is_set()
 }
 
-/// Start procesu. Przy `LAB_USE_KEYCHAIN=1` odtwarza z Keychain brakujące pliki 600
+/// Start procesu. Przy `JDG_USE_KEYCHAIN=1` odtwarza z Keychain brakujące pliki 600
 /// (token Gmail, sesja Saldeo, cache KSeF). Sekretów tekstowych nie kopiuje do `.env`.
 pub(crate) fn prepare_secret_store() {
     if !keychain_enabled() {
@@ -298,7 +298,7 @@ fn resolve_secret(secret: Secret) -> Result<(Option<String>, SecretSource)> {
     Ok((None, SecretSource::Missing))
 }
 
-/// Zapis sekretu: `.env` albo plik 0600; przy `LAB_USE_KEYCHAIN=1` także kopia w Keychain.
+/// Zapis sekretu: `.env` albo plik 0600; przy `JDG_USE_KEYCHAIN=1` także kopia w Keychain.
 /// Wynik mówi, gdzie sekret faktycznie trafił.
 pub(crate) fn save_secret(secret: Secret, value: &str) -> Result<SavedSecret> {
     if value.trim().is_empty() {
@@ -311,7 +311,7 @@ pub(crate) fn save_secret(secret: Secret, value: &str) -> Result<SavedSecret> {
 
     let file = if let Some(key) = secret.env_key() {
         upsert_dotenv_secret(key, value)?;
-        Some(lab_dotenv_path())
+        Some(jdg_dotenv_path())
     } else if let Some(path) = secret.file_path() {
         write_private_file(&path, value.as_bytes())?;
         Some(path)
@@ -329,13 +329,13 @@ pub(crate) fn save_secret(secret: Secret, value: &str) -> Result<SavedSecret> {
 }
 
 pub(crate) fn keychain_enabled() -> bool {
-    env_flag("LAB_USE_KEYCHAIN")
+    env_flag("JDG_USE_KEYCHAIN")
 }
 
-/// `LAB_NONINTERACTIVE=1`: przebieg bez użytkownika (launchd); LAB nie otwiera przeglądarki
+/// `JDG_NONINTERACTIVE=1`: przebieg bez użytkownika (launchd); jdg-cli nie otwiera przeglądarki
 /// i nie instaluje Playwright.
-pub(crate) fn lab_noninteractive() -> bool {
-    env_flag("LAB_NONINTERACTIVE")
+pub(crate) fn jdg_noninteractive() -> bool {
+    env_flag("JDG_NONINTERACTIVE")
 }
 
 fn env_flag(name: &str) -> bool {
@@ -385,9 +385,9 @@ pub(crate) fn strip_secret_env_keys(vars: &mut HashMap<String, String>) -> Resul
         }
         if dotenv_has_value(key)? {
             eprintln!(
-                "  [LAB] {key} jest już w {}; usuwam starszą kopię z {} bez nadpisywania",
-                lab_dotenv_path().display(),
-                lab_env_file_path().display()
+                "  [jdg-cli] {key} jest już w {}; usuwam starszą kopię z {} bez nadpisywania",
+                jdg_dotenv_path().display(),
+                jdg_env_file_path().display()
             );
             continue;
         }
@@ -401,7 +401,7 @@ fn dotenv_has_value(key: &str) -> Result<bool> {
     let vars = read_dotenv().with_context(|| {
         format!(
             "nie przenoszę {key}: nie mogę odczytać obecnego pliku {}",
-            lab_dotenv_path().display()
+            jdg_dotenv_path().display()
         )
     })?;
     Ok(vars.get(key).is_some_and(|value| !value.trim().is_empty()))
@@ -435,7 +435,7 @@ fn ensure_private_mode(path: &Path, what: &str) -> Result<()> {
     Ok(())
 }
 
-/// Odczyt pliku `KLUCZ=wartość` z sekretami (`.env`, `~/.config/lab/env`).
+/// Odczyt pliku `KLUCZ=wartość` z sekretami (`.env`, `~/.config/jdg-cli/env`).
 /// Brak pliku to pusta mapa; prawa szersze niż 600, błąd odczytu albo tekst spoza UTF-8
 /// to błąd podający ścieżkę, nigdy pusta mapa.
 pub(crate) fn read_private_env_file(path: &Path, what: &str) -> Result<HashMap<String, String>> {
@@ -462,7 +462,7 @@ pub(crate) fn warn_once(key: String, message: &str) {
     let warned = WARNED.get_or_init(|| Mutex::new(HashSet::new()));
     let first = warned.lock().map(|mut set| set.insert(key)).unwrap_or(true);
     if first {
-        eprintln!("  [LAB] {message}");
+        eprintln!("  [jdg-cli] {message}");
     }
 }
 
@@ -488,11 +488,11 @@ fn lookup_private_env_file(path: &Path, what: &str, key: &str) -> Result<Option<
 }
 
 fn dotenv_lookup(key: &str) -> Result<Option<String>> {
-    lookup_private_env_file(&lab_dotenv_path(), "plik .env", key)
+    lookup_private_env_file(&jdg_dotenv_path(), "plik .env", key)
 }
 
 fn env_file_lookup(key: &str) -> Result<Option<String>> {
-    lookup_private_env_file(&lab_env_file_path(), "plik env LAB", key)
+    lookup_private_env_file(&jdg_env_file_path(), "plik env jdg-cli", key)
 }
 
 fn migrate_env_file_secret(key: &str, value: &str) -> Result<bool> {
@@ -500,15 +500,15 @@ fn migrate_env_file_secret(key: &str, value: &str) -> Result<bool> {
     if !dotenv_has_value(key)? {
         upsert_dotenv_secret(key, value)?;
     }
-    let mut vars = read_lab_env_file()?;
+    let mut vars = read_jdg_env_file()?;
     if vars.remove(key).is_some() {
-        write_lab_env_file(&vars)?;
+        write_jdg_env_file(&vars)?;
     }
     Ok(true)
 }
 
 /// Ścieżka `.env`, liczona raz na proces (wybór lokalnego `.env` pyta Git).
-pub(crate) fn lab_dotenv_path() -> PathBuf {
+pub(crate) fn jdg_dotenv_path() -> PathBuf {
     #[cfg(test)]
     if let Some(ctx) = testing::current() {
         return ctx.root.join(".env");
@@ -520,13 +520,13 @@ pub(crate) fn lab_dotenv_path() -> PathBuf {
             let home = std::env::var_os("HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("."));
-            let override_path = std::env::var_os("LAB_DOTENV").map(PathBuf::from);
-            select_lab_dotenv_path(&cwd, &home, override_path.as_deref())
+            let override_path = std::env::var_os("JDG_DOTENV").map(PathBuf::from);
+            select_jdg_dotenv_path(&cwd, &home, override_path.as_deref())
         })
         .clone()
 }
 
-pub(crate) fn select_lab_dotenv_path(
+pub(crate) fn select_jdg_dotenv_path(
     cwd: &Path,
     home: &Path,
     override_path: Option<&Path>,
@@ -534,13 +534,13 @@ pub(crate) fn select_lab_dotenv_path(
     if let Some(path) = override_path {
         return path.to_path_buf();
     }
-    if cwd_is_lab_package(cwd) && cwd_dotenv_is_untracked_and_ignored(cwd) {
+    if cwd_is_jdg_package(cwd) && cwd_dotenv_is_untracked_and_ignored(cwd) {
         return cwd.join(".env");
     }
-    home.join(".config").join("lab").join(".env")
+    home.join(".config").join("jdg-cli").join(".env")
 }
 
-pub(crate) fn cwd_is_lab_package(cwd: &Path) -> bool {
+pub(crate) fn cwd_is_jdg_package(cwd: &Path) -> bool {
     let Ok(manifest) = fs::read_to_string(cwd.join("Cargo.toml")) else {
         return false;
     };
@@ -549,9 +549,7 @@ pub(crate) fn cwd_is_lab_package(cwd: &Path) -> bool {
         return false;
     }
     let package_header = Regex::new(r"^\[package\]\s*(?:#.*)?$").unwrap();
-    // `jdg-cli`, albo `lab-cli` — nazwa pakietu sprzed zmiany nazwy repo.
-    let package_name =
-        Regex::new(r#"^(?:"(?:jdg|lab)-cli"|'(?:jdg|lab)-cli')\s*(?:#.*)?$"#).unwrap();
+    let package_name = Regex::new(r#"^(?:"jdg-cli"|'jdg-cli')\s*(?:#.*)?$"#).unwrap();
     let mut in_package = false;
     let mut seen_package = false;
     let mut name_matches = None;
@@ -593,7 +591,7 @@ pub(crate) const DOTENV_GIT_HARDENING: [&str; 10] = [
 ];
 
 fn cwd_dotenv_is_untracked_and_ignored(cwd: &Path) -> bool {
-    // Tylko bezwzględna ścieżka z katalogów systemowych; bez Git zostaje ~/.config/lab/.env.
+    // Tylko bezwzględna ścieżka z katalogów systemowych; bez Git zostaje ~/.config/jdg-cli/.env.
     let Some(git) = crate::hardening::system_tool("git") else {
         return false;
     };
@@ -652,12 +650,12 @@ pub(crate) fn parse_env_text(text: &str) -> HashMap<String, String> {
 }
 
 fn read_dotenv() -> Result<HashMap<String, String>> {
-    read_private_env_file(&lab_dotenv_path(), "plik .env")
+    read_private_env_file(&jdg_dotenv_path(), "plik .env")
 }
 
 /// Zwykły odczyt klucza z `.env`; problem z plikiem = brak wartości i komunikat na stderr.
 pub(crate) fn dotenv_secret(key: &str) -> Option<String> {
-    let path = lab_dotenv_path();
+    let path = jdg_dotenv_path();
     match read_private_env_file(&path, "plik .env") {
         Ok(mut vars) => vars.remove(key).filter(|value| !value.trim().is_empty()),
         Err(err) => {
@@ -672,7 +670,7 @@ fn upsert_dotenv_secret(key: &str, value: &str) -> Result<()> {
     let mut vars = read_dotenv().with_context(|| {
         format!(
             "nie zapisuję {key}: nie mogę odczytać obecnego pliku {}",
-            lab_dotenv_path().display()
+            jdg_dotenv_path().display()
         )
     })?;
     vars.insert(key.to_string(), value.to_string());
@@ -680,10 +678,10 @@ fn upsert_dotenv_secret(key: &str, value: &str) -> Result<()> {
 }
 
 fn write_dotenv(vars: &HashMap<String, String>) -> Result<()> {
-    let path = lab_dotenv_path();
+    let path = jdg_dotenv_path();
     let mut keys = vars.keys().cloned().collect::<Vec<_>>();
     keys.sort();
-    let mut out = String::from("# LAB secrets. Do not commit. chmod 600.\n");
+    let mut out = String::from("# jdg-cli secrets. Do not commit. chmod 600.\n");
     for key in keys {
         if let Some(value) = vars.get(&key) {
             ensure_single_line_value(&key, value)?;
@@ -738,7 +736,7 @@ fn store_get(secret: Secret) -> Option<String> {
     if !keychain_enabled() {
         return None;
     }
-    // Wpis dodany ręcznie poza LAB (np. wklejka) bywa zakończony `\n`.
+    // Wpis dodany ręcznie poza jdg-cli (np. wklejka) bywa zakończony `\n`.
     keychain_get_secret(secret.account())
         .ok()
         .flatten()

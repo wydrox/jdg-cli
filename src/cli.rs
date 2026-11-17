@@ -13,9 +13,9 @@ pub(crate) const MAX_REVIEW_SCORE: u8 = 100;
 /// Domyślny limit dokumentów KSeF zatwierdzanych w jednym przebiegu (`0` = bez limitu).
 pub(crate) const DEFAULT_MAX_APPROVE: usize = 50;
 /// Env var, który wymusza `--require-mail` / `require_mail` (np. `1`).
-pub(crate) const APPROVE_REQUIRE_MAIL_ENV: &str = "LAB_APPROVE_REQUIRE_MAIL";
+pub(crate) const APPROVE_REQUIRE_MAIL_ENV: &str = "JDG_APPROVE_REQUIRE_MAIL";
 
-/// Czy `LAB_APPROVE_REQUIRE_MAIL` włącza filtr `require_mail`. Env tylko włącza:
+/// Czy `JDG_APPROVE_REQUIRE_MAIL` włącza filtr `require_mail`. Env tylko włącza:
 /// ani flaga CLI, ani argument MCP nie mogą go wyłączyć.
 pub(crate) fn approve_require_mail_from_env() -> bool {
     env_flag_enabled(std::env::var(APPROVE_REQUIRE_MAIL_ENV).ok().as_deref())
@@ -38,10 +38,10 @@ pub(crate) fn default_year() -> i32 {
 
 #[derive(Parser, Debug)]
 #[command(name = "jdg-cli")]
-#[command(about = "LAB — Lazy Accounting Buddy", long_about = None)]
+#[command(about = "jdg-cli — uzgadnianie faktur KSeF, Gmail i SaldeoSMART", long_about = None)]
 pub(crate) struct Cli {
     /// Dedykowana baza SQLite na rekordy, przebiegi i dopasowania.
-    /// Domyślnie lab.sqlite w katalogu LAB (LAB_ROOT, zob. lab doctor).
+    /// Domyślnie jdg-cli.sqlite w katalogu jdg-cli (JDG_ROOT, zob. jdg-cli doctor).
     #[arg(long, global = true)]
     pub(crate) db: Option<PathBuf>,
     #[command(subcommand)]
@@ -83,7 +83,7 @@ pub(crate) enum Commands {
         /// Google OAuth Desktop Client JSON do odświeżenia tokenu Gmail.
         #[arg(long)]
         gmail_client_secret: Option<PathBuf>,
-        /// Plik tokenu Gmail; domyślnie ~/.config/lab/gmail_token.json.
+        /// Plik tokenu Gmail; domyślnie ~/.config/jdg-cli/gmail_token.json.
         #[arg(long)]
         gmail_token_file: Option<PathBuf>,
         /// NIP do filtrowania PDF-ów z Gmaila.
@@ -170,7 +170,7 @@ pub(crate) enum Commands {
         /// Przy --approve: gdy dokumentów do zatwierdzenia jest więcej, nie zatwierdzaj żadnego (0 = bez limitu).
         #[arg(long, default_value_t = DEFAULT_MAX_APPROVE)]
         max_approve: usize,
-        /// Przy --approve: zatwierdzaj tylko dokumenty z fakturą z Gmaila (też LAB_APPROVE_REQUIRE_MAIL=1).
+        /// Przy --approve: zatwierdzaj tylko dokumenty z fakturą z Gmaila (też JDG_APPROVE_REQUIRE_MAIL=1).
         #[arg(long)]
         require_mail: bool,
     },
@@ -214,7 +214,7 @@ pub(crate) enum Commands {
         /// Gdy dokumentów do zatwierdzenia jest więcej, nie zatwierdzaj żadnego (0 = bez limitu).
         #[arg(long, default_value_t = DEFAULT_MAX_APPROVE)]
         max_approve: usize,
-        /// Zatwierdzaj tylko dokumenty z fakturą z Gmaila (też LAB_APPROVE_REQUIRE_MAIL=1).
+        /// Zatwierdzaj tylko dokumenty z fakturą z Gmaila (też JDG_APPROVE_REQUIRE_MAIL=1).
         #[arg(long)]
         require_mail: bool,
         /// Plik JSON z wynikiem.

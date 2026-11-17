@@ -884,10 +884,10 @@ fn saldeo_legacy_overrides_are_imported_into_sqlite() {
             .unwrap()
             .as_nanos()
     );
-    let root = std::env::temp_dir().join(format!("lab-saldeo-{nonce}"));
+    let root = std::env::temp_dir().join(format!("jdg-cli-saldeo-{nonce}"));
     let home = root.join("home");
-    let legacy_path = home.join(".config/lab/saldeo-overrides.json");
-    let db_path = root.join("lab.sqlite");
+    let legacy_path = home.join(".config/jdg-cli/saldeo-overrides.json");
+    let db_path = root.join("jdg-cli.sqlite");
     std::fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
 
     let legacy_override = SaldeoRecordOverride {
