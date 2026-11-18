@@ -66,12 +66,50 @@ pub(crate) fn openrouter_chat_model() -> String {
     strip_openrouter_batch_variant(&openrouter_model())
 }
 
-pub(crate) fn openrouter_progress_line(processed: usize, todo: usize, filename: &str) -> String {
+pub(crate) fn llm_progress_line(
+    label: &str,
+    processed: usize,
+    todo: usize,
+    filename: &str,
+) -> String {
     let percent = processed
         .saturating_mul(100)
         .checked_div(todo)
         .unwrap_or(100);
-    format!("OpenRouter {processed}/{todo} ({percent}%) {filename}")
+    format!("{label} {processed}/{todo} ({percent}%) {filename}")
+}
+
+pub(crate) fn openrouter_progress_line(processed: usize, todo: usize, filename: &str) -> String {
+    llm_progress_line("OpenRouter", processed, todo, filename)
+}
+
+/// Token counts from a provider response, when the body includes them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct LlmTokenUsage {
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+}
+
+pub(crate) fn json_object_u64(object: &Value, keys: &[&str]) -> Option<u64> {
+    keys.iter().find_map(|key| {
+        object.get(*key).and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_i64().and_then(|n| u64::try_from(n).ok()))
+        })
+    })
+}
+
+/// Anthropic uses `input_tokens`/`output_tokens`; OpenRouter and ppmlx use the
+/// Chat Completions names. Either shape is recorded.
+pub(crate) fn response_token_usage(response: &Value) -> LlmTokenUsage {
+    let Some(usage) = response.get("usage") else {
+        return LlmTokenUsage::default();
+    };
+    LlmTokenUsage {
+        input_tokens: json_object_u64(usage, &["input_tokens", "prompt_tokens"]),
+        output_tokens: json_object_u64(usage, &["output_tokens", "completion_tokens"]),
+    }
 }
 
 fn openrouter_timeout() -> Duration {
@@ -93,6 +131,10 @@ fn nullable_string(description: &str) -> Value {
         "description": description
     })
 }
+
+/// Same instruction for every paid PDF provider. Kept identical so the
+/// extraction version does not have to change when a provider is added.
+pub(crate) const INVOICE_PDF_EXTRACTION_PROMPT: &str = "Odczytaj fakturę z załączonego PDF. Zwróć tylko dane widoczne na dokumencie. Nie zgaduj i nie wyliczaj kwot. Jeśli pole nie jest pewne, użyj null. Daty: YYYY-MM-DD. Kwoty: kropka i dwa miejsca, bez waluty. Polski NIP: 10 cyfr. Zagraniczny VAT w polu NIP: null. Nazwy: pełna nazwa strony, nie nagłówek w stylu Nabywca albo DETAILS. Dla faktur zakupowych Productmesh nabywca to zwykle Productmesh, a sprzedawca to kontrahent.";
 
 pub(crate) fn invoice_structured_schema() -> Value {
     let mut properties = serde_json::Map::new();
@@ -175,7 +217,7 @@ pub(crate) fn openrouter_invoice_request(model: &str, filename: &str, pdf_base64
             "content": [
                 {
                     "type": "text",
-                    "text": "Odczytaj fakturę z załączonego PDF. Zwróć tylko dane widoczne na dokumencie. Nie zgaduj i nie wyliczaj kwot. Jeśli pole nie jest pewne, użyj null. Daty: YYYY-MM-DD. Kwoty: kropka i dwa miejsca, bez waluty. Polski NIP: 10 cyfr. Zagraniczny VAT w polu NIP: null. Nazwy: pełna nazwa strony, nie nagłówek w stylu Nabywca albo DETAILS. Dla faktur zakupowych Productmesh nabywca to zwykle Productmesh, a sprzedawca to kontrahent."
+                    "text": INVOICE_PDF_EXTRACTION_PROMPT
                 },
                 {
                     "type": "file",
@@ -224,10 +266,19 @@ pub(crate) fn openrouter_response_json(response: &Value) -> Result<Value> {
     crate::parse_json_from_llm(content)
 }
 
-pub(crate) fn openrouter_extract_invoice_fields(
+#[derive(Debug)]
+pub(crate) struct PaidInvoicePdf {
+    pub filename: String,
+    pub pdf_base64: String,
+}
+
+/// Shared gate for paid PDF providers: password-protected files and oversized
+/// PDFs are never uploaded. `destination` is only the provider name in the error.
+pub(crate) fn load_paid_invoice_pdf(
     record: &mut InvoiceRecord,
     path: &Path,
-) -> Result<bool> {
+    destination: &str,
+) -> Result<PaidInvoicePdf> {
     if record_is_password_protected(record) || pdf_is_password_protected(path) {
         if !record
             .warnings
@@ -241,15 +292,27 @@ pub(crate) fn openrouter_extract_invoice_fields(
     let meta = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
     if meta.len() > MAX_OCR_PDF_BYTES {
         return Err(anyhow!(
-            "PDF przekracza limit OCR {MAX_OCR_PDF_BYTES} bajtów; nie wysyłam do OpenRouter"
+            "PDF przekracza limit OCR {MAX_OCR_PDF_BYTES} bajtów; nie wysyłam do {destination}"
         ));
     }
     let bytes = fs::read(path).with_context(|| format!("odczyt {}", path.display()))?;
     let filename = path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("invoice.pdf");
-    let pdf_base64 = STANDARD.encode(&bytes);
+        .unwrap_or("invoice.pdf")
+        .to_string();
+    Ok(PaidInvoicePdf {
+        filename,
+        pdf_base64: STANDARD.encode(&bytes),
+    })
+}
+
+pub(crate) fn openrouter_extract_invoice_fields(
+    record: &mut InvoiceRecord,
+    path: &Path,
+    usage: &mut LlmTokenUsage,
+) -> Result<bool> {
+    let pdf = load_paid_invoice_pdf(record, path, "OpenRouter")?;
     // Nothing is sent without a key, so these failures must not block a later try.
     let api_key = secret_value(Secret::OpenRouterApiKey)
         .map_err(|err| transient_llm_error(format!("odczyt klucza OpenRouter: {err:#}")))?
@@ -259,7 +322,7 @@ pub(crate) fn openrouter_extract_invoice_fields(
             )
         })?;
     let model = openrouter_chat_model();
-    let body = openrouter_invoice_request(&model, filename, &pdf_base64);
+    let body = openrouter_invoice_request(&model, &pdf.filename, &pdf.pdf_base64);
     let client = Client::builder().timeout(openrouter_timeout()).build()?;
     let response = openrouter_send_with_retry(
         || match client
@@ -289,6 +352,7 @@ pub(crate) fn openrouter_extract_invoice_fields(
         },
         std::thread::sleep,
     )?;
+    *usage = response_token_usage(&response);
     let value = openrouter_response_json(&response)?;
     invoice_validation::apply_normalized_invoice_json(record, &value)
 }
@@ -320,16 +384,26 @@ pub(crate) fn openrouter_failure_kind(err: &reqwest::Error) -> OpenRouterFailure
 }
 
 /// Retry only when the request provably was not processed: no connection, rate
-/// limit, or a gateway that did not reach the model. A timeout is not retried here;
-/// the attempts ledger marks it transient so a later sync may try again.
+/// limit, a gateway that did not reach the model, or Anthropic overloaded (529).
+/// A timeout is not retried here; the attempts ledger marks it transient so a
+/// later sync may try again. HTTP 500 stays transient for the ledger but is not
+/// repeated immediately.
 pub(crate) fn openrouter_failure_is_retryable(failure: OpenRouterFailure) -> bool {
     matches!(
         failure,
-        OpenRouterFailure::Connect | OpenRouterFailure::Status(429 | 502 | 503 | 504)
+        OpenRouterFailure::Connect | OpenRouterFailure::Status(429 | 502 | 503 | 504 | 529)
     )
 }
 
 pub(crate) fn openrouter_send_with_retry<T>(
+    send: impl FnMut() -> std::result::Result<T, (OpenRouterFailure, anyhow::Error)>,
+    wait: impl FnMut(Duration),
+) -> Result<T> {
+    llm_send_with_retry("OpenRouter", send, wait)
+}
+
+pub(crate) fn llm_send_with_retry<T>(
+    label: &str,
     mut send: impl FnMut() -> std::result::Result<T, (OpenRouterFailure, anyhow::Error)>,
     mut wait: impl FnMut(Duration),
 ) -> Result<T> {
@@ -342,15 +416,15 @@ pub(crate) fn openrouter_send_with_retry<T>(
         attempt += 1;
         if !openrouter_failure_is_retryable(failure) || attempt >= OPENROUTER_MAX_ATTEMPTS {
             return Err(match failure {
-                OpenRouterFailure::Timeout => err.context(
-                    "OpenRouter nie odpowiedział w limicie czasu; nie ponawiam od razu, bo PDF mógł zostać przetworzony i rozliczony",
-                ),
+                OpenRouterFailure::Timeout => err.context(format!(
+                    "{label} nie odpowiedział w limicie czasu; nie ponawiam od razu, bo PDF mógł zostać przetworzony i rozliczony"
+                )),
                 _ => err,
             });
         }
         let delay = Duration::from_secs(2u64.pow(attempt - 1));
         eprintln!(
-            "  [Gmail/OpenRouter] {}, ponawiam za {}s...",
+            "  [Gmail/{label}] {}, ponawiam za {}s...",
             match failure {
                 OpenRouterFailure::Status(status) => format!("HTTP {status}"),
                 _ => "brak połączenia".to_string(),
@@ -396,6 +470,7 @@ mod tests {
         assert_eq!(body["provider"]["require_parameters"], true);
         let content = body["messages"][0]["content"].as_array().unwrap();
         assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], INVOICE_PDF_EXTRACTION_PROMPT);
         assert_eq!(content[1]["type"], "file");
         let file = &content[1]["file"];
         assert_eq!(file["filename"], "Invoice-M73SJH5X-0005.pdf");
@@ -444,7 +519,14 @@ mod tests {
     #[test]
     fn only_unprocessed_requests_are_retried() {
         use OpenRouterFailure::*;
-        for failure in [Connect, Status(429), Status(502), Status(503), Status(504)] {
+        for failure in [
+            Connect,
+            Status(429),
+            Status(502),
+            Status(503),
+            Status(504),
+            Status(529),
+        ] {
             assert!(openrouter_failure_is_retryable(failure), "{failure:?}");
         }
         for failure in [Timeout, Other, Status(500), Status(400), Status(402)] {
@@ -500,5 +582,56 @@ mod tests {
         let (result, calls, _) = run_with(&[OpenRouterFailure::Status(400)]);
         assert!(result.is_err());
         assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn token_usage_reads_anthropic_and_chat_shapes() {
+        let anthropic = serde_json::json!({"usage": {"input_tokens": 1200, "output_tokens": 80}});
+        assert_eq!(
+            response_token_usage(&anthropic),
+            LlmTokenUsage {
+                input_tokens: Some(1200),
+                output_tokens: Some(80)
+            }
+        );
+        let chat = serde_json::json!({"usage": {"prompt_tokens": 9, "completion_tokens": 3}});
+        assert_eq!(
+            response_token_usage(&chat),
+            LlmTokenUsage {
+                input_tokens: Some(9),
+                output_tokens: Some(3)
+            }
+        );
+        assert_eq!(
+            response_token_usage(
+                &serde_json::json!({"usage": {"input_tokens": 0, "output_tokens": 0}})
+            ),
+            LlmTokenUsage {
+                input_tokens: Some(0),
+                output_tokens: Some(0)
+            }
+        );
+        assert_eq!(
+            response_token_usage(&serde_json::json!({})),
+            LlmTokenUsage::default()
+        );
+    }
+
+    #[test]
+    fn password_protected_record_is_not_read_for_paid_upload() {
+        let mut record = empty_record(SourceKind::Mail);
+        record.warnings.push(PDF_PASSWORD_WARNING.to_string());
+        let err =
+            load_paid_invoice_pdf(&mut record, Path::new("/no/such.pdf"), "Anthropic").unwrap_err();
+        assert!(is_pdf_password_error(&err));
+        assert_eq!(
+            record
+                .warnings
+                .iter()
+                .filter(|warning| is_pdf_password_warning(warning))
+                .count(),
+            1,
+            "the existing password warning is not duplicated"
+        );
     }
 }

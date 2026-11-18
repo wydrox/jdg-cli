@@ -548,13 +548,14 @@ pub(crate) fn apply_isolated_env(command: &mut Command) -> &mut Command {
 
 /// Zmienne z sekretami jdg-cli i tokenem Gmail; procesy potomne, które ich nie potrzebują
 /// (node, npm, skrypt logowania Saldeo), dostają środowisko bez nich.
-pub(crate) const CHILD_SECRET_ENV_KEYS: [&str; 8] = [
+pub(crate) const CHILD_SECRET_ENV_KEYS: [&str; 9] = [
     "KSEF_TOKEN",
     "KSEF_CERT_PASSWORD",
     "KSEF_ACCESS_TOKEN",
     "SALDEO_USERNAME",
     "SALDEO_PASSWORD",
     "OPENROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
     "GMAIL_ACCESS_TOKEN",
     "GMAIL_REFRESH_TOKEN",
 ];

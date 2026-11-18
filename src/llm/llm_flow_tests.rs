@@ -124,10 +124,10 @@ fn run_once(records: &mut [InvoiceRecord], result: fn() -> Result<bool>) -> usiz
         records,
         &queued,
         None,
-        false,
+        LlmProvider::Local,
         "model-a",
         &mut ledgers,
-        |_, _| {
+        |_, _, _| {
             calls += 1;
             result()
         },
@@ -205,10 +205,10 @@ fn ledger_entries_are_keyed_by_hash_model_and_version() {
         &mut records,
         &[0],
         None,
-        false,
+        LlmProvider::Local,
         "model-a",
         &mut ledgers,
-        |_, _| Ok(true),
+        |_, _, _| Ok(true),
         |_, _| Ok(()),
     )
     .unwrap();
@@ -344,6 +344,113 @@ fn filename_guessed_number_is_replaced_by_llm_number() {
     invoice_validation::apply_validated_invoice_json(&mut record, &payload).unwrap();
     assert_eq!(record.invoice_number.as_deref(), Some("scan_0001"));
     assert!(record_number_guessed_from_filename(&record));
+}
+
+#[test]
+fn rejected_gemini_attempt_does_not_block_haiku() {
+    let dir = TempDir::new();
+    let record = incomplete_pdf(&dir, "a.pdf");
+    let line = serde_json::json!({
+        "content_hash": record.content_hash,
+        "model": "google/gemini-3.8-flash",
+        "version": LLM_EXTRACTION_VERSION,
+        "outcome": "rejected",
+        "attempted_at": "2026-01-01T00:00:00Z"
+    });
+    fs::write(dir.0.join(LLM_ATTEMPTS_FILE), format!("{line}\n")).unwrap();
+    assert_eq!(
+        queue(
+            std::slice::from_ref(&record),
+            LlmRequest::Automatic,
+            "google/gemini-3.8-flash"
+        ),
+        Vec::<usize>::new()
+    );
+    assert_eq!(
+        queue(
+            std::slice::from_ref(&record),
+            LlmRequest::Automatic,
+            DEFAULT_ANTHROPIC_MODEL
+        ),
+        vec![0]
+    );
+}
+
+#[test]
+fn ledger_records_token_usage_even_when_rejected() {
+    let dir = TempDir::new();
+    let mut records = vec![incomplete_pdf(&dir, "a.pdf")];
+    let mut ledgers = LlmAttemptLedgers::default();
+    run_llm_queue(
+        &mut records,
+        &[0],
+        None,
+        LlmProvider::Anthropic,
+        DEFAULT_ANTHROPIC_MODEL,
+        &mut ledgers,
+        |_, _, usage| {
+            usage.input_tokens = Some(1200);
+            usage.output_tokens = Some(80);
+            Err(anyhow!("LLM: kwoty są niespójne"))
+        },
+        |_, _| Ok(()),
+    )
+    .unwrap();
+    let text = fs::read_to_string(dir.0.join(LLM_ATTEMPTS_FILE)).unwrap();
+    assert!(text.contains("\"outcome\":\"rejected\""), "{text}");
+    assert!(text.contains("\"input_tokens\":1200"), "{text}");
+    assert!(text.contains("\"output_tokens\":80"), "{text}");
+    assert!(!text.contains("sk-ant"), "{text}");
+    let attempt: LlmAttempt = serde_json::from_str(text.trim()).unwrap();
+    assert_eq!(attempt.model, DEFAULT_ANTHROPIC_MODEL);
+    assert_eq!(attempt.input_tokens, Some(1200));
+    assert_eq!(attempt.output_tokens, Some(80));
+    // The rejection is for Haiku only; another model can still be sent.
+    assert_eq!(
+        queue(&records, LlmRequest::Automatic, "google/gemini-3.8-flash"),
+        vec![0]
+    );
+    assert_eq!(
+        queue(&records, LlmRequest::Automatic, DEFAULT_ANTHROPIC_MODEL),
+        Vec::<usize>::new()
+    );
+}
+
+#[test]
+fn anthropic_key_is_preferred_over_openrouter_and_local() {
+    let dir = TempDir::new();
+    let install = |env: &[(&str, &str)]| {
+        crate::credentials::testing::install(
+            dir.0.clone(),
+            env,
+            crate::credentials::testing::StoreMode::Unavailable,
+        )
+    };
+    {
+        let (_store, _guard) = install(&[
+            ("ANTHROPIC_API_KEY", "sk-ant-usr-test-key"),
+            ("OPENROUTER_API_KEY", "sk-or-test-key"),
+        ]);
+        assert_eq!(LlmProvider::selected(), LlmProvider::Anthropic);
+        assert!(LlmProvider::selected().is_paid());
+        let status = llm_provider_status();
+        assert_eq!(status["provider"], "anthropic");
+        assert_eq!(status["model"], anthropic_model());
+        let rendered = format!("{status} {}", llm_provider_status_line());
+        assert!(!rendered.contains("sk-ant-usr-test-key"), "{rendered}");
+        assert!(!rendered.contains("sk-or-test-key"), "{rendered}");
+    }
+    {
+        let (_store, _guard) = install(&[("OPENROUTER_API_KEY", "sk-or-test-key")]);
+        assert_eq!(LlmProvider::selected(), LlmProvider::OpenRouter);
+        assert_eq!(llm_provider_status()["provider"], "openrouter");
+    }
+    {
+        let (_store, _guard) = install(&[]);
+        assert_eq!(LlmProvider::selected(), LlmProvider::Local);
+        assert!(!LlmProvider::selected().is_paid());
+        assert_eq!(llm_provider_status()["provider"], "local");
+    }
 }
 
 #[test]

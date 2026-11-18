@@ -9,14 +9,16 @@ pub(crate) const ACCOUNT_KSEF_ACCESS_TOKEN: &str = "ksef_access_token";
 pub(crate) const ACCOUNT_SALDEO_USERNAME: &str = "saldeo_username";
 pub(crate) const ACCOUNT_SALDEO_PASSWORD: &str = "saldeo_password";
 pub(crate) const ACCOUNT_OPENROUTER_API_KEY: &str = "openrouter_api_key";
+pub(crate) const ACCOUNT_ANTHROPIC_API_KEY: &str = "anthropic_api_key";
 
 /// Klucze, których jdg-cli nie zapisuje już w ~/.config/jdg-cli/env.
-pub(crate) const SECRET_ENV_KEYS: [&str; 5] = [
+pub(crate) const SECRET_ENV_KEYS: [&str; 6] = [
     "KSEF_TOKEN",
     "KSEF_CERT_PASSWORD",
     "SALDEO_USERNAME",
     "SALDEO_PASSWORD",
     "OPENROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +31,7 @@ pub(crate) enum Secret {
     SaldeoUsername,
     SaldeoPassword,
     OpenRouterApiKey,
+    AnthropicApiKey,
 }
 
 /// Skąd pochodzi sekret; bez wartości, do raportów `doctor` i `onboard`.
@@ -131,6 +134,7 @@ impl Secret {
             Secret::SaldeoUsername => ACCOUNT_SALDEO_USERNAME,
             Secret::SaldeoPassword => ACCOUNT_SALDEO_PASSWORD,
             Secret::OpenRouterApiKey => ACCOUNT_OPENROUTER_API_KEY,
+            Secret::AnthropicApiKey => ACCOUNT_ANTHROPIC_API_KEY,
         }
     }
 
@@ -142,6 +146,7 @@ impl Secret {
             Secret::SaldeoUsername => Some("SALDEO_USERNAME"),
             Secret::SaldeoPassword => Some("SALDEO_PASSWORD"),
             Secret::OpenRouterApiKey => Some("OPENROUTER_API_KEY"),
+            Secret::AnthropicApiKey => Some("ANTHROPIC_API_KEY"),
             _ => None,
         }
     }
@@ -153,6 +158,7 @@ impl Secret {
             "SALDEO_USERNAME" => Some(Secret::SaldeoUsername),
             "SALDEO_PASSWORD" => Some(Secret::SaldeoPassword),
             "OPENROUTER_API_KEY" => Some(Secret::OpenRouterApiKey),
+            "ANTHROPIC_API_KEY" => Some(Secret::AnthropicApiKey),
             _ => None,
         }
     }
@@ -168,6 +174,7 @@ impl Secret {
             Secret::SaldeoUsername => "SALDEO_USERNAME",
             Secret::SaldeoPassword => "SALDEO_PASSWORD",
             Secret::OpenRouterApiKey => "OPENROUTER_API_KEY",
+            Secret::AnthropicApiKey => "ANTHROPIC_API_KEY",
         }
     }
 
@@ -185,7 +192,8 @@ impl Secret {
             | Secret::KsefCertPassword
             | Secret::SaldeoUsername
             | Secret::SaldeoPassword
-            | Secret::OpenRouterApiKey => None,
+            | Secret::OpenRouterApiKey
+            | Secret::AnthropicApiKey => None,
         }
     }
 
@@ -199,7 +207,8 @@ impl Secret {
             | Secret::KsefCertPassword
             | Secret::SaldeoUsername
             | Secret::SaldeoPassword
-            | Secret::OpenRouterApiKey => None,
+            | Secret::OpenRouterApiKey
+            | Secret::AnthropicApiKey => None,
         }
     }
 }

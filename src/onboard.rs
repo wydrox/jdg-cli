@@ -66,14 +66,15 @@ pub(crate) fn onboard(
             5 => onboard_edit_env_secret("KSEF_CERT_PASSWORD")?,
             6 => onboard_edit_env_secret("KSEF_TOKEN")?,
             7 => onboard_edit_env_secret("OPENROUTER_API_KEY")?,
-            8 => onboard_configure_ksef_data(status.year)?,
-            9 => {
+            8 => onboard_edit_env_secret("ANTHROPIC_API_KEY")?,
+            9 => onboard_configure_ksef_data(status.year)?,
+            10 => {
                 open_db(db_path)?;
                 eprintln!("✓ Baza gotowa: {}\n", db_path.display());
             }
-            10 => run_saldeo_auth_script()?,
-            11 => {}
-            12 => break,
+            11 => run_saldeo_auth_script()?,
+            12 => {}
+            13 => break,
             _ => unreachable!(),
         }
 
@@ -139,6 +140,10 @@ pub(crate) fn onboard_menu_items(
         format!(
             "OPENROUTER_API_KEY — {}",
             display_secret_value(secret_is_set(Secret::OpenRouterApiKey))
+        ),
+        format!(
+            "ANTHROPIC_API_KEY — {}",
+            display_secret_value(secret_is_set(Secret::AnthropicApiKey))
         ),
         format!(
             "KSEF_DATA_DIR — {} {}",
@@ -276,7 +281,16 @@ pub(crate) fn secrets_status_json(status: &OnboardStatus) -> Value {
         "ksef_cert_password": secret_status_entry(&status.ksef_password_source),
         "ksef_access_token": secret_status_entry(&status.ksef_access_source),
         "openrouter_api_key": secret_status_entry(&secret_source(Secret::OpenRouterApiKey)),
+        "anthropic_api_key": secret_status_entry(&secret_source(Secret::AnthropicApiKey)),
     })
+}
+
+pub(crate) fn anthropic_key_status_line() -> String {
+    format!(
+        "  Anthropic:       {}{}",
+        display_secret_value(secret_is_set(Secret::AnthropicApiKey)),
+        secret_source_suffix(&secret_source(Secret::AnthropicApiKey))
+    )
 }
 
 fn secret_status_entry(source: &SecretSource) -> Value {
@@ -330,11 +344,13 @@ pub(crate) fn print_onboard_status(status: &OnboardStatus, db_path: &Path) {
             "✗ (zainstaluj ppmlx i model gemma-4-e4b)"
         }
     );
+    eprintln!("{}", anthropic_key_status_line());
     eprintln!(
         "  OpenRouter:      {}{}",
         display_secret_value(secret_is_set(Secret::OpenRouterApiKey)),
         secret_source_suffix(&secret_source(Secret::OpenRouterApiKey))
     );
+    eprintln!("{}", llm_provider_status_line());
     eprintln!(
         "  openssl:         {}",
         if status.openssl_ok {
@@ -476,6 +492,7 @@ pub(crate) fn write_onboard_check_json(status: &OnboardStatus) -> Result<()> {
         "database": { "exists": status.db_exists },
         "warnings": status.tool_warnings,
         "secrets": secrets_status_json(status),
+        "llm": llm_provider_status(),
         "next_steps": steps
     });
     write_json(&status_json, None)
@@ -1446,13 +1463,14 @@ pub(crate) fn doctor(db_path: &Path, token_env: &str) -> Result<()> {
             "jdg_root_source": jdg_root.source.as_str()
         },
         "secrets": secrets_status_json(&status),
+        "llm": llm_provider_status(),
         "notes": [
             "GmailFetch wymaga tokenu OAuth z zakresem gmail.readonly.",
             "PDF-y są parsowane przez pdftotext, potem PyMuPDF/pdfplumber/pypdf jako fallback.",
             "jdg-cli reconcile bez własnych --ksef/--saldeo pobiera online metadane KSeF i Saldeo przed porównaniem.",
             "KSeF online używa KSEF_TOKEN, KSEF_CONTEXT_NIP/KSEF_NIP i KSEF_BASE_URL/KSEF_ENV; metadane są cache'owane lokalnie w KSEF_DATA_DIR albo data/ksef-<rok>.",
             secrets_storage_note(),
-            "Jeśli OPENROUTER_API_KEY jest ustawiony, jdg-cli odczytuje brakujące PDF-y przez google/gemini-3.8-flash ze structured output. Lokalny Gemma zostaje jako zapas."
+            "Jeśli ANTHROPIC_API_KEY jest ustawiony, jdg-cli wysyła trudne PDF-y bezpośrednio do Claude (domyślnie claude-haiku-5-5). Bez tego klucza, gdy jest OPENROUTER_API_KEY, używa google/gemini-3.8-flash. Lokalny Gemma zostaje jako zapas."
         ],
         "next_steps": onboard_next_steps(&status, gmail_usable)
     });
@@ -1659,5 +1677,55 @@ mod saldeo_auth_temp_file_tests {
         drop(file);
         assert!(!path.exists());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod anthropic_status_tests {
+    use super::*;
+    use crate::credentials::testing::{StoreMode, install};
+
+    #[test]
+    fn doctor_and_onboard_report_anthropic_source_without_the_key() {
+        let root = std::env::temp_dir().join(format!(
+            "jdg-cli-anthropic-status-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let (_store, _guard) = install(
+            root.clone(),
+            &[("ANTHROPIC_API_KEY", "sk-ant-usr-do-not-print")],
+            StoreMode::Unavailable,
+        );
+        let db = root.join("jdg.sqlite");
+        let status = collect_onboard_status(&db).unwrap();
+        let secrets = secrets_status_json(&status);
+        assert_eq!(secrets["anthropic_api_key"]["set"], true);
+        assert_eq!(secrets["anthropic_api_key"]["source"], "env");
+        assert_eq!(secrets["openrouter_api_key"]["source"], "missing");
+        let line = anthropic_key_status_line();
+        assert!(line.contains("********"), "{line}");
+        assert!(line.contains("zmienna sesji"), "{line}");
+        let items = onboard_menu_items(&status, &db, None);
+        assert!(items[7].starts_with("OPENROUTER_API_KEY"), "{items:?}");
+        assert!(items[8].starts_with("ANTHROPIC_API_KEY — ✓"), "{items:?}");
+        assert!(items[9].starts_with("KSEF_DATA_DIR"), "{items:?}");
+        let llm = llm_provider_status();
+        assert_eq!(llm["provider"], "anthropic");
+        if std::env::var("JDG_ANTHROPIC_MODEL")
+            .ok()
+            .is_none_or(|value| value.trim().is_empty())
+        {
+            assert_eq!(llm["model"], DEFAULT_ANTHROPIC_MODEL);
+        }
+        let blob = format!("{secrets} {line} {llm} {}", items[8]);
+        assert!(!blob.contains("sk-ant-usr-do-not-print"), "{blob}");
+        drop(_guard);
+        let _ = fs::remove_dir_all(&root);
     }
 }
