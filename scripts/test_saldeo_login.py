@@ -87,6 +87,18 @@ if (data.username !== "jan" || data.password !== "tajne-haslo") process.exit(2);
         self.assertNotIn("Boolean(login)", text)
         self.assertIn("waitForLoadState", text)
 
+    def test_script_finds_unnamed_username_without_mat_input_ids(self):
+        text = SCRIPT.read_text()
+        # Current Saldeo login: formcontrolname lives on <ds-input>, the native
+        # input is type=text with qa-id="username" (mat-input-N ids are unstable).
+        self.assertIn("inPasswordForm", text)
+        self.assertIn('getAttribute("qa-id")', text)
+        self.assertIn("Log in", text)
+        self.assertIn("Zaloguj", text)
+        self.assertIn("data-jdg-login", text)
+        self.assertNotIn("mat-input-0", text)
+        self.assertNotIn("SALDEO_PASSWORD", text)
+
 
 class SaldeoLoginPureTests(unittest.TestCase):
     def node_json(self, expr):
@@ -142,6 +154,133 @@ process.stdout.write(JSON.stringify({expr}));
             self.assertFalse(stale.exists())
             self.assertTrue(fresh.exists())
             self.assertTrue(unrelated.exists())
+
+    def test_pick_login_controls_on_current_saldeo_form(self):
+        """The live panel (probed 2026-11-17) has an unnamed text input, a password,
+        a visibility toggle, and a submit button labelled 'Log in'. A decoy text
+        input outside that form must not be filled."""
+        cases = r"""
+(() => {
+const field = (extra) => Object.assign({
+  tag: "input", type: "text", name: "", id: "", formControlName: "",
+  hostFormControlName: "", autocomplete: "off", qaId: "", text: "",
+  inPasswordForm: false, visible: true,
+}, extra);
+const current = [
+  field({ index: 0, name: "search", id: "q" }),
+  field({ index: 1, id: "mat-input-0", hostFormControlName: "username", qaId: "username", inPasswordForm: true }),
+  field({ index: 2, type: "password", id: "mat-input-1", hostFormControlName: "password", qaId: "password", inPasswordForm: true }),
+  field({ index: 3, tag: "button", type: "button", text: "visibility", qaId: "password-trailing-icon", inPasswordForm: true }),
+  field({ index: 4, tag: "button", type: "submit", text: "Log in", qaId: "login-button", inPasswordForm: true }),
+];
+const unnamed = current.map((control, index) => index === 1
+  ? field({ index, id: "mat-input-0", inPasswordForm: true })
+  : control);
+const noForm = unnamed.map((control) => Object.assign({}, control, { inPasswordForm: false }));
+const legacy = [
+  field({ index: 0, name: "username", id: "login" }),
+  field({ index: 1, type: "password", name: "password" }),
+  field({ index: 2, tag: "button", type: "submit", text: "Zaloguj się" }),
+];
+const polishButton = [
+  field({ index: 0, inPasswordForm: true }),
+  field({ index: 1, type: "password", inPasswordForm: true }),
+  field({ index: 2, tag: "button", type: "button", text: "visibility", inPasswordForm: true }),
+  field({ index: 3, tag: "button", type: "button", text: "Zaloguj się", inPasswordForm: true }),
+];
+const hiddenFirst = [
+  field({ index: 0, type: "hidden", inPasswordForm: true, visible: false }),
+  field({ index: 1, inPasswordForm: true }),
+  field({ index: 2, type: "password", inPasswordForm: true }),
+];
+const email = [
+  field({ index: 0, type: "email", autocomplete: "username", inPasswordForm: true }),
+  field({ index: 1, type: "password", autocomplete: "current-password", inPasswordForm: true }),
+];
+const earlierSubmit = [
+  field({ index: 0, tag: "button", type: "submit", text: "Search" }),
+  field({ index: 1, qaId: "username", inPasswordForm: true }),
+  field({ index: 2, type: "password", inPasswordForm: true }),
+  field({ index: 3, tag: "button", type: "button", text: "visibility", inPasswordForm: true }),
+  field({ index: 4, tag: "button", type: "submit", text: "Log in", qaId: "login-button", inPasswordForm: true }),
+];
+const picked = (controls) => m.pickLoginControls(controls);
+return {
+  current: picked(current),
+  unnamed: picked(unnamed),
+  noForm: picked(noForm),
+  legacy: picked(legacy),
+  polishButton: picked(polishButton),
+  hiddenFirst: picked(hiddenFirst),
+  email: picked(email),
+  earlierSubmit: picked(earlierSubmit),
+};
+})()
+"""
+        got = self.node_json(cases)
+        for name in ("current", "unnamed", "noForm"):
+            self.assertEqual(got[name], {"user": 1, "pass": 2, "submit": 4}, name)
+        self.assertEqual(got["legacy"], {"user": 0, "pass": 1, "submit": 2})
+        self.assertEqual(got["polishButton"], {"user": 0, "pass": 1, "submit": 3})
+        self.assertEqual(got["hiddenFirst"], {"user": 1, "pass": 2, "submit": None})
+        self.assertEqual(got["email"], {"user": 0, "pass": 1, "submit": None})
+        self.assertEqual(got["earlierSubmit"], {"user": 1, "pass": 2, "submit": 4})
+
+    def test_fill_login_types_saved_credentials_into_unnamed_field(self):
+        password = "tajne-haslo"
+        js = r"""
+const m = require(process.argv[1]);
+const controls = [
+  { index: 0, tag: "input", type: "text", name: "search", id: "q", formControlName: "", hostFormControlName: "", autocomplete: "off", qaId: "", text: "", inPasswordForm: false, visible: true },
+  { index: 1, tag: "input", type: "text", name: "", id: "mat-input-0", formControlName: "", hostFormControlName: "", autocomplete: "off", qaId: "", text: "", inPasswordForm: true, visible: true },
+  { index: 2, tag: "input", type: "password", name: "", id: "mat-input-1", formControlName: "", hostFormControlName: "password", autocomplete: "off", qaId: "password", text: "", inPasswordForm: true, visible: true },
+  { index: 3, tag: "button", type: "button", name: "", id: "", formControlName: "", hostFormControlName: "password", autocomplete: "", qaId: "password-trailing-icon", text: "visibility", inPasswordForm: true, visible: true },
+  { index: 4, tag: "button", type: "submit", name: "", id: "", formControlName: "", hostFormControlName: "", autocomplete: "", qaId: "login-button", text: "Log in", inPasswordForm: true, visible: true },
+];
+const seen = [];
+const fills = [];
+const clicks = [];
+const presses = [];
+const page = {
+  async evaluate(_fn, arg) {
+    seen.push(arg === undefined ? null : arg);
+    return arg === undefined ? controls : true;
+  },
+  locator(selector) {
+    const role = (selector.match(/data-jdg-login="([^"]+)"/) || [])[1] || selector;
+    const loc = {
+      first() { return loc; },
+      async count() {
+        return role === "submit" && !(seen[1] && seen[1].submit != null) ? 0 : 1;
+      },
+      async click() { clicks.push(role); },
+      async fill(value) { fills.push([role, value]); },
+      async press(key) { presses.push([role, key]); },
+    };
+    return loc;
+  },
+};
+m.fillLogin(page, "jan", process.argv[2]).then((ok) => {
+  process.stdout.write(JSON.stringify({ ok, seen, fills, clicks, presses }));
+}).catch((err) => {
+  console.error(err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});
+"""
+        result = subprocess.run(
+            ["node", "-e", js, str(SCRIPT), password],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        got = json.loads(result.stdout)
+        self.assertTrue(got["ok"])
+        self.assertEqual(got["seen"][1], {"user": 1, "pass": 2, "submit": 4})
+        self.assertEqual(got["fills"], [["user", "jan"], ["pass", password]])
+        self.assertIn("submit", got["clicks"])
+        self.assertNotIn("password-trailing-icon", got["clicks"])
+        self.assertNotIn(password, json.dumps(got["seen"]))
+        self.assertNotIn(password, result.stderr)
 
 
 class SaldeoLoginTempProfileTests(unittest.TestCase):
