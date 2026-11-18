@@ -468,6 +468,7 @@ fn accounts_use_expected_names() {
     assert_eq!(Secret::SaldeoUsername.account(), "saldeo_username");
     assert_eq!(Secret::SaldeoPassword.account(), "saldeo_password");
     assert_eq!(Secret::OpenRouterApiKey.account(), "openrouter_api_key");
+    assert_eq!(Secret::AnthropicApiKey.account(), "anthropic_api_key");
     assert_eq!(Secret::from_env_key("KSEF_TOKEN"), Some(Secret::KsefToken));
     assert_eq!(
         Secret::from_env_key("SALDEO_USERNAME"),
@@ -481,12 +482,32 @@ fn accounts_use_expected_names() {
             "KSEF_CERT_PASSWORD",
             "SALDEO_USERNAME",
             "SALDEO_PASSWORD",
-            "OPENROUTER_API_KEY"
+            "OPENROUTER_API_KEY",
+            "ANTHROPIC_API_KEY"
         ]
     );
     assert_eq!(
         Secret::from_env_key("OPENROUTER_API_KEY"),
         Some(Secret::OpenRouterApiKey)
+    );
+    assert_eq!(
+        Secret::from_env_key("ANTHROPIC_API_KEY"),
+        Some(Secret::AnthropicApiKey)
+    );
+}
+
+#[test]
+fn anthropic_api_key_is_saved_in_dotenv() {
+    let (root, _store, _guard) = setup("anthropic-zapis", &[], StoreMode::Unavailable);
+    let saved = save_secret(Secret::AnthropicApiKey, "sk-ant-usr-dummy").unwrap();
+    assert!(saved.file.is_some());
+    assert!(!saved.keychain);
+    let text = dotenv_text(&root);
+    assert!(text.contains("ANTHROPIC_API_KEY='sk-ant-usr-dummy'"));
+    assert_eq!(secret_source(Secret::AnthropicApiKey), SecretSource::File);
+    assert_eq!(
+        secret_value(Secret::AnthropicApiKey).unwrap().as_deref(),
+        Some("sk-ant-usr-dummy")
     );
 }
 

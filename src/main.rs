@@ -50,6 +50,8 @@ use invoice_validation::counterparty_name_is_placeholder;
 pub(crate) use jdg_root::*;
 mod openrouter;
 pub(crate) use openrouter::*;
+mod anthropic;
+pub(crate) use anthropic::*;
 #[cfg(test)]
 mod tests;
 

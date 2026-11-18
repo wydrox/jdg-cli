@@ -52,6 +52,10 @@ struct LlmAttempt {
     attempted_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) input_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) output_tokens: Option<u64>,
 }
 
 type LlmAttemptKey = (String, String, String);
@@ -223,6 +227,73 @@ pub(crate) fn enrich_candidates_with_llm_explicit(
     )
 }
 
+/// Which model reads hard invoice PDFs. Anthropic wins when its key is set,
+/// then OpenRouter, then the local ppmlx server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LlmProvider {
+    Anthropic,
+    OpenRouter,
+    Local,
+}
+
+impl LlmProvider {
+    pub(crate) fn selected() -> Self {
+        if anthropic_configured() {
+            Self::Anthropic
+        } else if openrouter_configured() {
+            Self::OpenRouter
+        } else {
+            Self::Local
+        }
+    }
+
+    pub(crate) fn is_paid(self) -> bool {
+        !matches!(self, Self::Local)
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Anthropic => "anthropic",
+            Self::OpenRouter => "openrouter",
+            Self::Local => "local",
+        }
+    }
+
+    pub(crate) fn model(self) -> String {
+        match self {
+            Self::Anthropic => anthropic_model(),
+            Self::OpenRouter => openrouter_chat_model(),
+            Self::Local => llm_model(),
+        }
+    }
+
+    pub(crate) fn progress_line(self, processed: usize, todo: usize, filename: &str) -> String {
+        match self {
+            Self::Anthropic => anthropic_progress_line(processed, todo, filename),
+            Self::OpenRouter => openrouter_progress_line(processed, todo, filename),
+            Self::Local => format!("LLM: {processed}/{todo} {filename}"),
+        }
+    }
+}
+
+pub(crate) fn llm_provider_status() -> Value {
+    let provider = LlmProvider::selected();
+    serde_json::json!({
+        "provider": provider.as_str(),
+        "model": provider.model(),
+    })
+}
+
+pub(crate) fn llm_provider_status_line() -> String {
+    let provider = LlmProvider::selected();
+    let name = match provider {
+        LlmProvider::Anthropic => "Anthropic",
+        LlmProvider::OpenRouter => "OpenRouter",
+        LlmProvider::Local => "lokalny ppmlx",
+    };
+    format!("  LLM faktur:      {name} ({})", provider.model())
+}
+
 pub(crate) fn enrich_candidates_with_gemma_with_hook<F>(
     records: &mut [InvoiceRecord],
     skip_hashes: &HashSet<String>,
@@ -251,23 +322,19 @@ fn enrich_candidates_with_request<F>(
 where
     F: FnMut(&[InvoiceRecord], usize) -> Result<()>,
 {
-    let use_openrouter = openrouter_configured();
+    let provider = LlmProvider::selected();
     let force = request == LlmRequest::Forced;
-    let model = if use_openrouter {
-        openrouter_chat_model()
-    } else {
-        llm_model()
-    };
+    let model = provider.model();
     let mut ledgers = LlmAttemptLedgers::default();
     let queue = llm_queue(
         records,
         skip_hashes,
-        use_openrouter,
+        provider.is_paid(),
         request,
         &model,
         &mut ledgers,
     )?;
-    if use_openrouter && !force {
+    if provider.is_paid() && !force {
         let skipped = records
             .iter()
             .filter(|record| {
@@ -276,25 +343,28 @@ where
             })
             .count();
         if skipped > 0 {
-            eprintln!(
-                "  [Gmail/OpenRouter] pominięto {skipped} łatwych albo bez sygnału faktury; Gemini tylko dla trudnych"
-            );
+            match provider {
+                LlmProvider::Anthropic => eprintln!(
+                    "  [Gmail/Anthropic] pominięto {skipped} łatwych albo bez sygnału faktury; Claude tylko dla trudnych"
+                ),
+                LlmProvider::OpenRouter => eprintln!(
+                    "  [Gmail/OpenRouter] pominięto {skipped} łatwych albo bez sygnału faktury; Gemini tylko dla trudnych"
+                ),
+                LlmProvider::Local => {}
+            }
         }
     }
     if queue.is_empty() {
         return Ok(());
     }
-    let extract: fn(&mut InvoiceRecord, &Path) -> Result<bool> = if use_openrouter {
-        openrouter_extract_invoice_fields
-    } else {
-        gemma_extract_invoice_fields
-    };
     eprintln!(
         "  [Gmail/LLM] wzbogacanie {} kandydatów przez {}...",
         queue.len(),
         model
     );
-    if !use_openrouter && let Err(err) = ensure_ppmlx_server() {
+    if provider == LlmProvider::Local
+        && let Err(err) = ensure_ppmlx_server()
+    {
         eprintln!("  [Gmail/LLM] pominięto wzbogacanie: {err}");
         for idx in 0..records.len() {
             if !skip_hashes.contains(&records[idx].content_hash)
@@ -313,10 +383,14 @@ where
         records,
         &queue,
         progress,
-        use_openrouter,
+        provider,
         &model,
         &mut ledgers,
-        extract,
+        |record, path, usage| match provider {
+            LlmProvider::Anthropic => anthropic_extract_invoice_fields(record, path, usage),
+            LlmProvider::OpenRouter => openrouter_extract_invoice_fields(record, path, usage),
+            LlmProvider::Local => gemma_extract_invoice_fields(record, path, usage),
+        },
         after_record,
     )?;
     eprintln!("  [Gmail/LLM] gotowe");
@@ -328,10 +402,10 @@ fn run_llm_queue<F>(
     records: &mut [InvoiceRecord],
     queue: &[usize],
     progress: Option<Arc<Mutex<String>>>,
-    use_openrouter: bool,
+    provider: LlmProvider,
     model: &str,
     ledgers: &mut LlmAttemptLedgers,
-    mut extract: impl FnMut(&mut InvoiceRecord, &Path) -> Result<bool>,
+    mut extract: impl FnMut(&mut InvoiceRecord, &Path, &mut LlmTokenUsage) -> Result<bool>,
     mut after_record: F,
 ) -> Result<()>
 where
@@ -344,17 +418,14 @@ where
         };
         let path = &resolve_jdg_source_path(&source_path);
         let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("PDF");
-        let status = if use_openrouter {
-            openrouter_progress_line(processed + 1, todo, fname)
-        } else {
-            format!("LLM: {}/{} {}", processed + 1, todo, fname)
-        };
+        let status = provider.progress_line(processed + 1, todo, fname);
         eprintln!("  [Gmail/LLM] {}", status);
         if let Some(ref p) = progress {
             set_progress(p, status);
         }
         let hash = llm_attempt_hash(&records[idx], path);
-        let result = extract(&mut records[idx], path);
+        let mut usage = LlmTokenUsage::default();
+        let result = extract(&mut records[idx], path, &mut usage);
         let outcome = llm_attempt_outcome(&result);
         match &result {
             Ok(true) => {
@@ -382,6 +453,8 @@ where
                     .as_ref()
                     .err()
                     .map(|err| truncate(&format!("{err:#}"), 300)),
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
             };
             // A lost entry only costs one repeated request; do not drop the
             // answer already received for this record.
@@ -431,7 +504,11 @@ fn ensure_ppmlx_server() -> Result<()> {
     ))
 }
 
-fn gemma_extract_invoice_fields(record: &mut InvoiceRecord, path: &Path) -> Result<bool> {
+fn gemma_extract_invoice_fields(
+    record: &mut InvoiceRecord,
+    path: &Path,
+    usage: &mut LlmTokenUsage,
+) -> Result<bool> {
     let (text, extraction_warnings) = extract_document_text(path)?;
     if text.chars().count() > 60_000 {
         return Err(anyhow!(
@@ -477,7 +554,7 @@ Tekst PDF:
 ---"#,
         text
     );
-    let value = ppmlx_extract_json(&prompt)?;
+    let value = ppmlx_extract_json(&prompt, usage)?;
     let changed = invoice_validation::apply_normalized_invoice_json(record, &value)?;
     for warning in extraction_warnings {
         if !record.warnings.contains(&warning) {
@@ -487,7 +564,7 @@ Tekst PDF:
     Ok(changed)
 }
 
-fn ppmlx_extract_json(prompt: &str) -> Result<Value> {
+fn ppmlx_extract_json(prompt: &str, usage: &mut LlmTokenUsage) -> Result<Value> {
     let base = ppmlx_base_url()?;
     let model = llm_model();
     let client = Client::builder().timeout(llm_timeout()).build()?;
@@ -510,6 +587,7 @@ fn ppmlx_extract_json(prompt: &str) -> Result<Value> {
         {
             Ok(resp) if resp.status().is_success() => {
                 let response: Value = resp.json()?;
+                *usage = response_token_usage(&response);
                 return ppmlx_response_json(&response);
             }
             Ok(resp) if resp.status().as_u16() == 503 => {
