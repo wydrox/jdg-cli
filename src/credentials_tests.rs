@@ -531,6 +531,21 @@ fn saldeo_login_script_reads_file_not_argv() {
 }
 
 #[test]
+fn saldeo_login_script_finds_unnamed_username_in_password_form() {
+    let script = include_str!("../scripts/saldeo-login.js");
+    // Natywny input loginu nie ma name/formcontrolname; id mat-input-N nie jest stabilne.
+    assert!(script.contains("inPasswordForm"));
+    assert!(script.contains("qa-id"));
+    assert!(script.contains("Log in"));
+    assert!(script.contains("Zaloguj"));
+    assert!(script.contains("data-jdg-login"));
+    assert!(!script.contains("mat-input-0"));
+    assert!(!script.contains("process.argv["));
+    assert!(!script.contains("process.env.SALDEO_PASSWORD"));
+    assert!(script.contains("JDG_SALDEO_LOGIN_FILE"));
+}
+
+#[test]
 fn saldeo_auth_uses_local_playwright_not_npx_tmp() {
     let source = include_str!("onboard.rs");
     assert!(source.contains("NODE_PATH"));

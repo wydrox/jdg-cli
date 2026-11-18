@@ -5,17 +5,6 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const USER_SELECTORS = [
-  'input[name="username"]',
-  'input[name="login"]',
-  'input[name="j_username"]',
-  'input[formcontrolname="username"]',
-  'input[formcontrolname="login"]',
-  "input#username",
-  "input#login",
-  'input[type="email"]',
-  'input[autocomplete="username"]',
-];
 const PASS_SELECTORS = [
   'input[type="password"]',
   'input[name="password"]',
@@ -23,13 +12,9 @@ const PASS_SELECTORS = [
   'input[formcontrolname="password"]',
   'input[autocomplete="current-password"]',
 ];
-const SUBMIT_SELECTORS = [
-  'button[type="submit"]',
-  'input[type="submit"]',
-  'button:has-text("Zaloguj")',
-  'button:has-text("Zaloguj się")',
-  'button:has-text("Login")',
-];
+// Etykiety przycisku logowania. Aktualny panel Saldeo jest po angielsku („Log in”);
+// starszy widok używa „Zaloguj” / „Zaloguj się”.
+const SUBMIT_LABELS = ["Zaloguj", "Zaloguj się", "Log in", "Login"];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -259,18 +244,229 @@ async function waitFirstLocator(page, selectors, timeoutMs) {
   return firstLocator(page, selectors);
 }
 
-async function fillLogin(page, username, password) {
-  const user = await firstLocator(page, USER_SELECTORS);
-  const pass = await firstLocator(page, PASS_SELECTORS);
-  if (!user || !pass) {
+function norm(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isPasswordControl(control) {
+  if (!control || control.tag !== "input") {
     return false;
   }
+  const type = norm(control.type);
+  const name = norm(control.name);
+  const formControl = norm(control.formControlName) || norm(control.hostFormControlName);
+  const qaId = norm(control.qaId);
+  return (
+    type === "password" ||
+    name === "password" ||
+    name === "j_password" ||
+    formControl === "password" ||
+    norm(control.autocomplete) === "current-password" ||
+    qaId === "password"
+  );
+}
+
+// Wyższy wynik wygrywa. 0 = to nie jest pole loginu.
+// Panel Saldeo (ds-input) trzyma formcontrolname na hoście, a na natywnym inpucie
+// zostawia qa-id="username", type=text i autocomplete=off. Id mat-input-N pomijamy.
+function usernameRank(control) {
+  if (!control || control.tag !== "input" || isPasswordControl(control)) {
+    return 0;
+  }
+  const type = norm(control.type);
+  if (["hidden", "checkbox", "radio", "submit", "button", "file", "image", "search"].includes(type)) {
+    return 0;
+  }
+  const name = norm(control.name);
+  const id = norm(control.id);
+  const formControl = norm(control.formControlName) || norm(control.hostFormControlName);
+  const qaId = norm(control.qaId);
+  if (
+    name === "username" ||
+    name === "login" ||
+    name === "j_username" ||
+    id === "username" ||
+    id === "login" ||
+    formControl === "username" ||
+    formControl === "login" ||
+    formControl === "j_username" ||
+    qaId === "username" ||
+    qaId === "login"
+  ) {
+    return 3;
+  }
+  if (norm(control.autocomplete) === "username") {
+    return 2;
+  }
+  if (type === "email") {
+    return 1;
+  }
+  return 0;
+}
+
+function isTextLike(control) {
+  if (!control || control.tag !== "input" || isPasswordControl(control)) {
+    return false;
+  }
+  const type = norm(control.type);
+  return type === "text" || type === "email" || type === "";
+}
+
+function isSubmitControl(control) {
+  if (!control || (control.tag !== "button" && control.tag !== "input")) {
+    return false;
+  }
+  const type = norm(control.type);
+  if (type === "submit" || norm(control.qaId) === "login-button") {
+    return true;
+  }
+  const text = normText(control.text);
+  if (SUBMIT_LABELS.some((label) => normText(label) === text)) {
+    return true;
+  }
+  return text.includes("zaloguj");
+}
+
+function visibleControl(control) {
+  return Boolean(control) && control.visible !== false;
+}
+
+// Wybiera login, hasło i przycisk z opisu kontrolek (bez sekretów).
+// Gdy pole loginu nie ma name/id, bierzemy widoczny input tekstowy w formularzu hasła,
+// a gdy formularza nie ma — najbliższe takie pole przed hasłem.
+function pickLoginControls(controls) {
+  const list = Array.isArray(controls) ? controls : [];
+  const pass = list.find((control) => visibleControl(control) && isPasswordControl(control)) || null;
+  let user = null;
+  let bestRank = 0;
+  for (const control of list) {
+    if (!visibleControl(control)) {
+      continue;
+    }
+    const rank = usernameRank(control);
+    if (rank > bestRank) {
+      user = control;
+      bestRank = rank;
+    }
+  }
+  if (!user && pass) {
+    user =
+      list.find(
+        (control) =>
+          visibleControl(control) &&
+          control.inPasswordForm &&
+          isTextLike(control) &&
+          control.index !== pass.index
+      ) || null;
+    if (!user) {
+      const before = list.filter(
+        (control) => visibleControl(control) && isTextLike(control) && control.index < pass.index
+      );
+      user = before.length ? before[before.length - 1] : null;
+    }
+  }
+  const submits = list.filter((control) => visibleControl(control) && isSubmitControl(control));
+  const inPasswordForm = submits.filter((control) => control.inPasswordForm);
+  const pool = inPasswordForm.length ? inPasswordForm : submits;
+  const submit =
+    pool.find((control) => norm(control.qaId) === "login-button") || pool[0] || null;
+  return {
+    user: user ? user.index : null,
+    pass: pass ? pass.index : null,
+    submit: submit ? submit.index : null,
+  };
+}
+
+// Zbiera inputy i przyciski w przeglądarce. Musi być samodzielna: Playwright
+// serializuje tylko tę funkcję, bez domknięć z Node.
+function collectLoginControls() {
+  const nodes = Array.from(document.querySelectorAll("input, button"));
+  return nodes.map((el, index) => {
+    const form = el.closest("form");
+    const host = el.closest("ds-input");
+    const tag = el.tagName.toLowerCase();
+    const attrType = el.getAttribute("type");
+    const type = (attrType || (tag === "input" || tag === "button" ? el.type : "") || "").toLowerCase();
+    const style = window.getComputedStyle(el);
+    const visible =
+      style.display !== "none" && style.visibility !== "hidden" && el.getClientRects().length > 0;
+    return {
+      index,
+      tag,
+      type,
+      name: el.getAttribute("name") || "",
+      id: el.id || "",
+      formControlName: el.getAttribute("formcontrolname") || "",
+      hostFormControlName: host ? host.getAttribute("formcontrolname") || "" : "",
+      autocomplete: el.getAttribute("autocomplete") || "",
+      qaId: el.getAttribute("qa-id") || "",
+      text: (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim(),
+      inPasswordForm: Boolean(form && form.querySelector('input[type="password"]')),
+      visible,
+    };
+  });
+}
+
+async function readLoginControls(page) {
+  try {
+    const controls = await page.evaluate(collectLoginControls);
+    return Array.isArray(controls) ? controls : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function markLoginTargets(page, picked) {
+  try {
+    return await page.evaluate((target) => {
+      const nodes = Array.from(document.querySelectorAll("input, button"));
+      for (const el of document.querySelectorAll("[data-jdg-login]")) {
+        el.removeAttribute("data-jdg-login");
+      }
+      const mark = (index, role) => {
+        if (typeof index !== "number" || index < 0) {
+          return false;
+        }
+        const el = nodes[index];
+        if (!el) {
+          return false;
+        }
+        el.setAttribute("data-jdg-login", role);
+        return true;
+      };
+      if (!mark(target.user, "user") || !mark(target.pass, "pass")) {
+        return false;
+      }
+      if (typeof target.submit === "number") {
+        mark(target.submit, "submit");
+      }
+      return true;
+    }, picked);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function fillLogin(page, username, password) {
+  const picked = pickLoginControls(await readLoginControls(page));
+  if (picked.user == null || picked.pass == null) {
+    return false;
+  }
+  if (!(await markLoginTargets(page, picked))) {
+    return false;
+  }
+  const user = page.locator('[data-jdg-login="user"]').first();
+  const pass = page.locator('[data-jdg-login="pass"]').first();
   await user.click();
   await user.fill(username);
   await pass.click();
   await pass.fill(password);
-  const submit = await firstLocator(page, SUBMIT_SELECTORS);
-  if (submit) {
+  const submit = page.locator('[data-jdg-login="submit"]').first();
+  if ((await submit.count()) > 0) {
     await submit.click();
   } else {
     await pass.press("Enter");
@@ -283,8 +479,14 @@ async function waitAndFillLogin(page, username, password, timeoutMs) {
   if (!pass) {
     return false;
   }
-  await waitFirstLocator(page, USER_SELECTORS, 5000);
-  return fillLogin(page, username, password);
+  const deadline = Date.now() + 5000;
+  do {
+    if (await fillLogin(page, username, password)) {
+      return true;
+    }
+    await sleep(200);
+  } while (Date.now() < deadline);
+  return false;
 }
 
 async function storageAuthenticated(context) {
@@ -473,6 +675,7 @@ module.exports = {
   removeTempProfile,
   sweepStaleTempProfiles,
   shutdown,
-  USER_SELECTORS,
+  pickLoginControls,
+  collectLoginControls,
   PASS_SELECTORS,
 };
